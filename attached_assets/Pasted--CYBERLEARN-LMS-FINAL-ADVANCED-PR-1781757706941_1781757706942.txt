@@ -1,0 +1,2133 @@
+# ============================================================
+# CYBERLEARN LMS — FINAL ADVANCED PROMPT FOR CURSOR AI
+# Offline Cybersecurity Learning Platform
+# Kali Linux + Raspberry Pi | Electron + React + SQLite
+# ============================================================
+
+## ROLE & CONTEXT
+
+You are a senior full-stack desktop application engineer. You are building
+a 100% offline, hardware-locked, cybersecurity Learning Management System
+(LMS) desktop application. This software is inspired by Udemy + Coursera +
+Pluralsight but runs entirely offline — NO internet connection is ever made,
+NO CDN is used, NO telemetry, NO remote calls of any kind. Everything runs
+locally on the machine.
+
+The app targets two platforms only:
+- Kali Linux (x64)
+- Raspberry Pi OS (armv7l and arm64)
+
+Packaged as .deb and .AppImage via electron-builder.
+
+---
+
+## ABSOLUTE RULES — NEVER VIOLATE THESE
+
+1. ZERO network calls. No fetch(), no axios, no http, no https to any
+   external URL. Ever. All assets, fonts, libraries are bundled locally.
+
+2. nodeIntegration is ALWAYS false in all BrowserWindows.
+
+3. contextIsolation is ALWAYS true in all BrowserWindows.
+
+4. All Node.js access from renderer goes through IPC + preload bridge ONLY.
+
+5. DevTools are ALWAYS disabled in production builds.
+
+6. setContentProtection(true) on EVERY BrowserWindow — no exceptions.
+
+7. Every single database write to sensitive fields uses AES-256-GCM
+   encryption before INSERT. Every read decrypts after SELECT.
+
+8. No hardcoded secrets, keys, or passwords anywhere in source code.
+
+9. All content files (videos, PDFs) served via custom Electron protocol
+   only — never expose raw filesystem paths to renderer.
+
+10. AppArmor profile blocks all network at OS level — deny inet, deny inet6.
+
+---
+
+## TECH STACK (ALL BUNDLED OFFLINE — NO CDN)
+
+| Layer            | Technology                                      |
+|------------------|-------------------------------------------------|
+| Desktop Shell    | Electron 28+ (LTS)                              |
+| Main Process     | Node.js 20 LTS                                  |
+| Renderer         | React 18 + React Router v6                      |
+| Styling          | Tailwind CSS 3 (PostCSS build, no CDN)          |
+| Database         | SQLite3 via better-sqlite3 (synchronous)        |
+| Query Builder    | Knex.js (migrations + seeds)                    |
+| Video Player     | Video.js 8 (local build, no CDN)                |
+| PDF Viewer       | PDF.js 4 (local build, no CDN)                  |
+| Auth Tokens      | jsonwebtoken (JWT access + refresh)             |
+| 2FA              | speakeasy (TOTP) + qrcode (QR generation)       |
+| Encryption       | Node.js built-in crypto (AES-256-GCM)           |
+| HWID Lock        | node-machine-id + custom license engine         |
+| Certificate PDF  | pdfkit (local, no CDN)                          |
+| Rich Text Editor | Quill.js 2 (bundled local build)                |
+| Icons            | Phosphor Icons (bundled SVG sprite, no CDN)     |
+| Fonts            | Inter + JetBrains Mono (bundled .woff2 files)   |
+| Packaging        | electron-builder 24+                            |
+| Testing          | Jest + @testing-library/react                   |
+
+---
+
+## DESIGN SYSTEM — ORANGE + BLUE + GREEN THEME
+
+### Color Tokens (define in tailwind.config.js AND as CSS variables)
+
+```javascript
+// tailwind.config.js colors
+colors: {
+  // Backgrounds
+  'bg-base':    '#0f1117',   // deepest background
+  'bg-surface': '#171c27',   // cards, panels
+  'bg-card':    '#1e2535',   // elevated cards
+  'bg-hover':   '#252d40',   // hover states
+
+  // Orange — primary accent (actions, CTAs, progress)
+  'orange-50':  '#fff4e6',
+  'orange-100': '#ffd8a8',
+  'orange-300': '#ff9f3f',
+  'orange-500': '#f97316',   // PRIMARY orange
+  'orange-700': '#c2410c',
+  'orange-900': '#7c2d12',
+
+  // Blue — information, navigation, links
+  'blue-50':    '#e8f4fd',
+  'blue-100':   '#bfdbfe',
+  'blue-300':   '#60a5fa',
+  'blue-500':   '#3b82f6',   // PRIMARY blue
+  'blue-700':   '#1d4ed8',
+  'blue-900':   '#1e3a5f',
+
+  // Green — success, completion, certificates, badges
+  'green-50':   '#ecfdf5',
+  'green-100':  '#bbf7d0',
+  'green-300':  '#4ade80',
+  'green-500':  '#22c55e',   // PRIMARY green
+  'green-700':  '#15803d',
+  'green-900':  '#14532d',
+
+  // Neutral text
+  'text-primary':   '#f1f5f9',
+  'text-secondary': '#94a3b8',
+  'text-muted':     '#4b5563',
+
+  // Semantic
+  'danger':  '#ef4444',
+  'warning': '#f59e0b',
+}
+```
+
+### Typography Rules
+- All headers: `font-family: 'JetBrains Mono', monospace` — gives hacker/terminal feel
+- All body text: `font-family: 'Inter', sans-serif`
+- Font files stored at: `renderer/public/fonts/`
+- Import via CSS @font-face only — no Google Fonts URL
+
+### Component Patterns
+- All cards: `bg-card` background, `border border-blue-900/40` border,
+  `rounded-xl`, `p-5`
+- Primary buttons: `bg-orange-500 hover:bg-orange-700 text-white font-mono`
+- Success/completion states: `text-green-500` or `bg-green-900/30 border-green-700`
+- Navigation active state: `border-l-2 border-orange-500 bg-bg-hover`
+- Progress bars: orange fill on dark track
+- Badges: hexagonal clip-path, green glow border on completion
+- Certificates: white background PDF, orange header band, green verified stamp
+
+---
+
+## COMPLETE DATABASE SCHEMA
+
+File: `main/db/schema.js` — run via Knex migrations
+
+```sql
+-- USERS TABLE
+CREATE TABLE users (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  username        TEXT NOT NULL UNIQUE,
+  email_enc       TEXT,                    -- AES-256-GCM encrypted
+  password_hash   TEXT NOT NULL,           -- bcrypt hash
+  role            TEXT CHECK(role IN ('admin','student')) NOT NULL,
+  totp_secret_enc TEXT,                    -- AES-256-GCM, admin only
+  totp_enabled    INTEGER DEFAULT 0,
+  is_active       INTEGER DEFAULT 1,
+  failed_logins   INTEGER DEFAULT 0,
+  lockout_until   INTEGER DEFAULT 0,       -- Unix timestamp
+  avatar_path     TEXT,
+  created_at      INTEGER NOT NULL,
+  last_login      INTEGER
+);
+
+-- COURSES TABLE
+CREATE TABLE courses (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  title         TEXT NOT NULL,
+  description   TEXT,
+  thumbnail_path TEXT,
+  category      TEXT,
+  difficulty    TEXT CHECK(difficulty IN ('beginner','intermediate','advanced')),
+  created_by    INTEGER REFERENCES users(id),
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER,
+  is_published  INTEGER DEFAULT 0,
+  total_lessons INTEGER DEFAULT 0,
+  total_duration_sec INTEGER DEFAULT 0
+);
+
+-- MODULES TABLE
+CREATE TABLE modules (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id   INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  description TEXT,
+  order_index INTEGER NOT NULL DEFAULT 0
+);
+
+-- LESSONS TABLE
+CREATE TABLE lessons (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  module_id        INTEGER NOT NULL REFERENCES modules(id) ON DELETE CASCADE,
+  title            TEXT NOT NULL,
+  type             TEXT CHECK(type IN ('video','pdf','quiz')) NOT NULL,
+  content_path_enc TEXT,        -- AES-256-GCM encrypted local path
+  duration_seconds INTEGER DEFAULT 0,
+  order_index      INTEGER NOT NULL DEFAULT 0,
+  is_preview       INTEGER DEFAULT 0
+);
+
+-- ENROLLMENTS TABLE
+CREATE TABLE enrollments (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      INTEGER NOT NULL REFERENCES users(id),
+  course_id    INTEGER NOT NULL REFERENCES courses(id),
+  enrolled_at  INTEGER NOT NULL,
+  completed_at INTEGER,
+  UNIQUE(user_id, course_id)
+);
+
+-- PROGRESS TABLE
+CREATE TABLE progress (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL REFERENCES users(id),
+  lesson_id       INTEGER NOT NULL REFERENCES lessons(id),
+  watched_seconds INTEGER DEFAULT 0,
+  completed       INTEGER DEFAULT 0,
+  last_accessed   INTEGER,
+  UNIQUE(user_id, lesson_id)
+);
+
+-- QUIZZES TABLE
+CREATE TABLE quizzes (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  lesson_id    INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+  title        TEXT NOT NULL,
+  instructions TEXT,
+  pass_percent INTEGER NOT NULL DEFAULT 70,
+  max_attempts INTEGER DEFAULT 3,
+  time_limit_sec INTEGER DEFAULT 0,   -- 0 = no limit
+  shuffle_questions INTEGER DEFAULT 0
+);
+
+-- QUESTIONS TABLE
+CREATE TABLE questions (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  quiz_id       INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+  question_text TEXT NOT NULL,
+  type          TEXT CHECK(type IN ('mcq','multi','truefalse')) NOT NULL,
+  explanation   TEXT,       -- shown after submit
+  order_index   INTEGER DEFAULT 0,
+  points        INTEGER DEFAULT 1
+);
+
+-- OPTIONS TABLE
+CREATE TABLE options (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+  option_text TEXT NOT NULL,
+  is_correct  INTEGER NOT NULL DEFAULT 0
+);
+
+-- QUIZ ATTEMPTS TABLE
+CREATE TABLE quiz_attempts (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      INTEGER NOT NULL REFERENCES users(id),
+  quiz_id      INTEGER NOT NULL REFERENCES quizzes(id),
+  score        REAL NOT NULL,
+  max_score    REAL NOT NULL,
+  passed       INTEGER NOT NULL,
+  answers_json TEXT,          -- JSON of user answers for review
+  attempted_at INTEGER NOT NULL
+);
+
+-- BADGES TABLE
+CREATE TABLE badges (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  name           TEXT NOT NULL,
+  description    TEXT,
+  image_path     TEXT NOT NULL,    -- PNG stored in ./content/badges/
+  criteria_type  TEXT CHECK(criteria_type IN (
+                   'complete_course','pass_quiz','watch_all_videos',
+                   'first_login','perfect_score')) NOT NULL,
+  criteria_value TEXT,             -- e.g. course_id or pass percentage
+  color_hex      TEXT DEFAULT '#22c55e'
+);
+
+-- USER BADGES TABLE
+CREATE TABLE user_badges (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id   INTEGER NOT NULL REFERENCES users(id),
+  badge_id  INTEGER NOT NULL REFERENCES badges(id),
+  earned_at INTEGER NOT NULL,
+  UNIQUE(user_id, badge_id)
+);
+
+-- CERTIFICATES TABLE
+CREATE TABLE certificates (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER NOT NULL REFERENCES users(id),
+  course_id   INTEGER NOT NULL REFERENCES courses(id),
+  issued_at   INTEGER NOT NULL,
+  cert_hash   TEXT NOT NULL UNIQUE,   -- SHA-256 of (user_id+course_id+timestamp)
+  pdf_path    TEXT,                   -- stored in ./content/certificates/
+  UNIQUE(user_id, course_id)
+);
+
+-- SESSIONS TABLE
+CREATE TABLE sessions (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id            INTEGER NOT NULL REFERENCES users(id),
+  refresh_token_hash TEXT NOT NULL,
+  expires_at         INTEGER NOT NULL,
+  created_at         INTEGER NOT NULL
+);
+
+-- HWID LICENSE TABLE
+CREATE TABLE hwid_license (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  hwid_hash       TEXT NOT NULL UNIQUE,
+  license_key_enc TEXT NOT NULL,     -- AES-256-GCM encrypted
+  activated_at    INTEGER NOT NULL,
+  is_valid        INTEGER DEFAULT 1
+);
+
+-- AUDIT LOG TABLE
+CREATE TABLE audit_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER REFERENCES users(id),
+  action     TEXT NOT NULL,
+  detail     TEXT,
+  ip_local   TEXT,
+  timestamp  INTEGER NOT NULL
+);
+
+-- PLATFORM SETTINGS TABLE
+CREATE TABLE platform_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+-- Insert defaults
+INSERT INTO platform_settings VALUES ('platform_name', 'CyberLearn LMS');
+INSERT INTO platform_settings VALUES ('admin_panel_enabled', '1');
+INSERT INTO platform_settings VALUES ('logo_path', '');
+INSERT INTO platform_settings VALUES ('cert_signature_name', 'Administrator');
+INSERT INTO platform_settings VALUES ('cert_org_name', 'CyberLearn Institute');
+```
+
+---
+
+## COMPLETE FEATURE SPECIFICATION
+
+### FEATURE 1 — HWID LICENSE SYSTEM
+
+File: `main/security/hwid.js`
+
+```javascript
+const { machineIdSync } = require('node-machine-id');
+const crypto = require('crypto');
+const db = require('../db/connection');
+const { encrypt, decrypt, deriveKey } = require('./crypto');
+
+function getHWID() {
+  const raw = machineIdSync({ original: true });
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+function checkLicense() {
+  const hwid = getHWID();
+  const row = db.prepare('SELECT * FROM hwid_license WHERE hwid_hash = ?').get(hwid);
+  if (!row || !row.is_valid) return { valid: false, reason: 'NO_LICENSE' };
+  return { valid: true };
+}
+
+function activateLicense(licenseKey) {
+  const hwid = getHWID();
+  // Validate key format: XXXX-XXXX-XXXX-XXXX
+  const pattern = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+  if (!pattern.test(licenseKey)) return { success: false, error: 'INVALID_FORMAT' };
+  // Check not already used on another HWID
+  const existing = db.prepare('SELECT * FROM hwid_license WHERE license_key_enc = ?')
+    .get(encrypt(licenseKey, deriveKey(hwid)));
+  if (existing) return { success: false, error: 'ALREADY_USED' };
+  db.prepare(`INSERT INTO hwid_license (hwid_hash, license_key_enc, activated_at, is_valid)
+              VALUES (?, ?, ?, 1)`)
+    .run(hwid, encrypt(licenseKey, deriveKey(hwid)), Date.now());
+  return { success: true };
+}
+
+module.exports = { getHWID, checkLicense, activateLicense };
+```
+
+### FEATURE 2 — AES-256-GCM ENCRYPTION
+
+File: `main/security/crypto.js`
+
+```javascript
+const crypto = require('crypto');
+
+// Derive 32-byte key from HWID using PBKDF2 — never stored on disk
+function deriveKey(hwid) {
+  const salt = Buffer.from('cyberlearn-salt-v1', 'utf8');
+  return crypto.pbkdf2Sync(hwid, salt, 100000, 32, 'sha256');
+}
+
+function encrypt(plaintext, key) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(String(plaintext), 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${encrypted.toString('hex')}`;
+}
+
+function decrypt(payload, key) {
+  const [ivHex, tagHex, encHex] = payload.split(':');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'));
+  decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+  return decipher.update(Buffer.from(encHex, 'hex')).toString('utf8') + decipher.final('utf8');
+}
+
+module.exports = { deriveKey, encrypt, decrypt };
+```
+
+### FEATURE 3 — JWT AUTH + RATE LIMITING + LOCKOUT
+
+File: `main/ipc/auth.js`
+
+```javascript
+// Access token: 15min expiry
+// Refresh token: 7 days, stored hashed in sessions table
+// Failed login > 5 → lockout 15 minutes → logged in audit_log
+// Admin login requires password + TOTP verification (2 steps)
+// Student login requires password only
+
+// IPC channels:
+// 'auth:login'         → { username, password, totpCode? }
+// 'auth:refresh'       → { refreshToken }
+// 'auth:logout'        → { refreshToken }
+// 'auth:setup-totp'    → admin only, returns QR code data URL
+// 'auth:verify-totp'   → { totpCode } — final admin login step
+```
+
+### FEATURE 4 — ADMIN PANEL
+
+Admin panel is a separate BrowserWindow or a protected route within the
+main window. Access controlled by role === 'admin' check on EVERY IPC call.
+
+Admin panel can be DISABLED via platform_settings table:
+```javascript
+// In main process, on every admin IPC call:
+const setting = db.prepare("SELECT value FROM platform_settings WHERE key='admin_panel_enabled'").get();
+if (setting.value !== '1') {
+  return { error: 'ADMIN_PANEL_DISABLED' };
+}
+```
+
+When admin_panel_enabled = '0':
+- Admin login shows "Admin panel is currently disabled" message
+- All admin IPC handlers return ADMIN_PANEL_DISABLED error
+- Students are unaffected and can still log in normally
+- Only re-enabling via direct DB edit (emergency access procedure)
+
+#### Admin Panel Pages:
+
+**A. Dashboard** — `AdminDashboard.jsx`
+- Stats cards (orange): Total Students, Active Today, Total Courses, Completions
+- Bar chart: enrollments per course (local Chart.js, no CDN)
+- Table: recent student activity (last login, lessons done, time spent)
+- Audit log last 50 entries
+
+**B. Course Builder** — `CourseBuilder.jsx`
+- Left panel: course tree (modules → lessons) with drag-and-drop (dnd-kit, bundled)
+- Right panel: lesson editor
+- File picker button → opens Electron dialog for local file selection
+  ```javascript
+  // IPC: 'admin:pick-file' → { type: 'video'|'pdf'|'image'|'badge' }
+  const { filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: type === 'video'
+      ? [{ name: 'Videos', extensions: ['mp4','mkv','webm'] }]
+      : [{ name: 'PDFs', extensions: ['pdf'] }]
+  });
+  // Copy file to ./content/videos/ or ./content/pdfs/ with UUID filename
+  // Store encrypted path in database
+  ```
+- Course thumbnail upload
+- Rich text description editor (Quill.js, bundled)
+- Publish/unpublish toggle
+- Preview course as student (opens student view in same window)
+
+**C. Quiz Builder** — `QuizBuilder.jsx`
+- Add MCQ / Multi-select / True-False questions
+- Set pass %, max attempts, time limit per quiz
+- Drag-and-drop question reordering
+- Preview quiz as student
+
+**D. Badge Manager** — `BadgeManager.jsx`
+- Create badge: name, description, upload PNG image, pick criteria type
+- Criteria types:
+  - complete_course → select which course
+  - pass_quiz → select quiz + minimum score
+  - watch_all_videos → select course
+  - first_login → no config needed
+  - perfect_score → select quiz
+- Auto-award: checked on every progress save and quiz submission
+- Manual award: admin can award any badge to any student
+
+**E. Certificate Manager** — `CertificateManager.jsx`
+- Configure certificate template:
+  - Platform name, organization name, admin signature name
+  - Logo upload (PNG)
+  - Certificate color accent (orange default)
+- Auto-generation: triggered automatically when student completes course
+  (all lessons marked complete + if quizzes exist, all passed)
+- Manual generation: admin can issue certificate to any student for any course
+- Certificate PDF contains:
+  - Student full name
+  - Course title
+  - Completion date
+  - Unique cert_hash (QR code)
+  - Organization name + signature line
+  - Orange header band, green "VERIFIED" stamp
+- Verify page: served via Electron custom protocol
+  `cyberlearn://verify/{cert_hash}` → looks up in certificates table
+
+**F. Student Manager** — `UserManagement.jsx`
+- Create student account (username, password — student cannot self-register)
+- Suspend/activate accounts
+- Reset password
+- Enroll student in course
+- View per-student progress, badges, certificates
+- Export student report as PDF (pdfkit, local)
+
+**G. Platform Settings** — `PlatformSettings.jsx`
+- Platform name
+- Logo upload
+- Certificate defaults (org name, signature)
+- Admin panel enable/disable toggle (with confirmation dialog)
+- Database backup: export encrypted SQLite file to chosen local path
+- Database restore: import encrypted SQLite from local path
+
+### FEATURE 5 — STUDENT PANEL
+
+Student panel shows only after login with role === 'student'.
+Students CANNOT access any admin route or IPC handler.
+
+**A. Student Dashboard** — `StudentDashboard.jsx`
+- Header: username, avatar initials, logout button
+- Progress section: enrolled courses as cards with circular progress ring
+  (SVG ring, orange stroke, green on completion)
+- Badges shelf: earned badges displayed as hexagonal cards
+- Recent activity: last 5 lessons accessed
+- Certificates: list with green badge icon + download button
+
+**B. Course Browser** — `CourseBrowser.jsx`
+- Grid of course cards (courses enrolled by admin)
+- Each card: thumbnail, title, category, difficulty badge, progress bar
+- Filter by category, difficulty
+- Search by title (client-side, no server needed)
+
+**C. Course Player** — `CoursePlayer.jsx`
+Layout: left sidebar (course outline) + right main area (video/PDF/quiz)
+
+Left sidebar:
+- Module list → lesson list
+- Completed lessons: green checkmark icon
+- Current lesson: orange highlight
+- Progress percentage at top
+
+Right area — Video lesson:
+- Video.js player, dark theme
+- MOVING WATERMARK: `<VideoWatermark username={currentUser.username} />`
+  Position randomizes every 8 seconds, smooth CSS transition
+  Diagonal rotation -30deg, opacity 0.3, font-family monospace
+  Format: "USERNAME | DD/MM/YYYY HH:MM:SS"
+- No right-click context menu on video (preventDefault)
+- Playback speeds: 0.5x 0.75x 1x 1.25x 1.5x 2x
+- Auto-save progress every 10 seconds via IPC
+- "Mark Complete" button appears when watched_seconds >= duration * 0.9
+- On complete: check if all lessons done → if yes → auto-generate certificate
+
+Right area — PDF lesson:
+- PDF.js viewer, inline
+- No download button, no print button
+- Page nav, zoom controls
+- Mark complete button (manual, no percentage requirement)
+
+Right area — Quiz lesson:
+- See Quiz Engine below
+
+**D. Quiz Engine** — `QuizEngine.jsx`
+- Timer display (if time_limit_sec > 0) — counts down in orange
+- One question per screen OR all questions (configurable by admin)
+- MCQ: radio buttons
+- Multi-select: checkboxes
+- True/False: two large buttons
+- Submit button disabled until all answered
+- After submit: show score, pass/fail, per-question feedback with explanation
+- If passed: badge auto-awarded, certificate check triggered
+- If failed: show attempts remaining, retry button
+
+**E. My Certificates** — `Certificates.jsx`
+- List of all earned certificates
+- Each row: course name, issue date, cert hash, Download PDF button
+- Download generates PDF via IPC (pdfkit): `'cert:download' → { certId }`
+
+**F. My Badges** — `Badges.jsx`
+- Hexagonal badge grid
+- Each badge: image, name, earned date, description tooltip on hover
+- Locked badges shown as greyed-out with lock icon
+
+---
+
+## SECURITY IMPLEMENTATION (ALL REQUIRED)
+
+### S1 — Hardware-Locked License (see FEATURE 1)
+
+### S2 — AES-256-GCM Database Encryption (see FEATURE 2)
+Encrypt these fields before storing: email, totp_secret, content_path,
+license_key, answers_json, cert_hash (before storing verify copy)
+
+### S3 — JWT Access + Refresh Tokens
+```javascript
+const ACCESS_SECRET  = deriveKey(hwid + 'access').toString('hex');
+const REFRESH_SECRET = deriveKey(hwid + 'refresh').toString('hex');
+const accessToken  = jwt.sign({ userId, role }, ACCESS_SECRET, { expiresIn: '15m' });
+const refreshToken = jwt.sign({ userId },       REFRESH_SECRET, { expiresIn: '7d' });
+// Store SHA-256 of refreshToken in sessions table, not raw token
+// On refresh: rotate — invalidate old, issue new pair
+```
+
+### S4 — Login Rate Limit + 15-Minute Lockout
+```javascript
+// Before checking password:
+if (user.lockout_until > Date.now()) {
+  const remaining = Math.ceil((user.lockout_until - Date.now()) / 60000);
+  return { error: 'LOCKED', minutesRemaining: remaining };
+}
+// After wrong password:
+const newFails = user.failed_logins + 1;
+if (newFails >= 5) {
+  db.prepare('UPDATE users SET failed_logins=?, lockout_until=? WHERE id=?')
+    .run(newFails, Date.now() + 15 * 60 * 1000, user.id);
+} else {
+  db.prepare('UPDATE users SET failed_logins=? WHERE id=?').run(newFails, user.id);
+}
+// On successful login: reset failed_logins=0, lockout_until=0
+```
+
+### S5 — TOTP 2FA (Admin Only — Mandatory)
+```javascript
+// Admin login is a 2-step process:
+// Step 1: username + password → if correct, return { step: 'totp_required' }
+// Step 2: totpCode → verify with speakeasy → if correct, issue tokens
+const verified = speakeasy.totp.verify({
+  secret: decrypt(admin.totp_secret_enc, masterKey),
+  encoding: 'base32',
+  token: totpCode,
+  window: 1   // allow 30-second clock skew
+});
+```
+
+### S6 — 30-Minute Idle Auto-Logout
+```javascript
+// renderer/src/hooks/useIdleTimer.js
+export function useIdleTimer(onIdle) {
+  useEffect(() => {
+    let timer;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(onIdle, 30 * 60 * 1000);
+    };
+    const events = ['mousemove','keydown','mousedown','touchstart','scroll'];
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      clearTimeout(timer);
+      events.forEach(e => window.removeEventListener(e, reset));
+    };
+  }, [onIdle]);
+}
+// onIdle → call 'auth:logout' IPC → clear tokens → redirect to /login
+```
+
+### S7 — DevTools Disabled + Kill-Switch
+```javascript
+// In every new BrowserWindow:
+webPreferences: { devTools: false }
+// Also:
+mainWindow.webContents.on('devtools-opened', () => {
+  mainWindow.webContents.closeDevTools();
+  writeAuditLog(null, 'DEVTOOLS_BYPASS_ATTEMPT', 'Force close triggered');
+  app.quit(); // hard quit on bypass attempt
+});
+```
+
+### S8 — IPC Whitelist (preload.js)
+```javascript
+const ALLOWED = [
+  'auth:login','auth:logout','auth:refresh','auth:setup-totp','auth:verify-totp',
+  'course:list','course:get','lesson:get','lesson:complete',
+  'progress:save','progress:get',
+  'quiz:get','quiz:submit',
+  'cert:download','cert:verify',
+  'badge:list',
+  'admin:pick-file','admin:course:create','admin:course:update','admin:course:delete',
+  'admin:lesson:create','admin:lesson:update','admin:lesson:delete',
+  'admin:quiz:create','admin:question:create',
+  'admin:user:list','admin:user:create','admin:user:suspend','admin:user:enroll',
+  'admin:badge:create','admin:badge:award',
+  'admin:cert:generate','admin:settings:get','admin:settings:update',
+  'admin:panel:disable','admin:backup','admin:restore',
+  'session:idle-logout','license:check','license:activate',
+  'integrity:check'
+];
+contextBridge.exposeInMainWorld('ipc', {
+  invoke: (channel, data) => {
+    if (!ALLOWED.includes(channel)) throw new Error(`Blocked: ${channel}`);
+    return ipcRenderer.invoke(channel, data);
+  },
+  on: (channel, cb) => {
+    if (!ALLOWED.includes(channel)) throw new Error(`Blocked: ${channel}`);
+    ipcRenderer.on(channel, (_, data) => cb(data));
+  }
+});
+```
+
+### S9 — Content Security Policy
+```javascript
+session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+  callback({
+    responseHeaders: {
+      ...details.responseHeaders,
+      'Content-Security-Policy': [
+        "default-src 'self' cyberlearn:",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: cyberlearn:",
+        "media-src 'self' blob: cyberlearn:",
+        "font-src 'self'",
+        "connect-src 'self'",
+        "frame-src 'none'",
+        "object-src 'none'"
+      ].join('; ')
+    }
+  });
+});
+```
+
+### S10 — Screenshot + Screen Recording Block
+```javascript
+// On every BrowserWindow creation:
+win.setContentProtection(true);
+
+// Process guard daemon — check every 5 seconds
+const BLOCKED = ['obs','obs-studio','kazam','ffmpeg','recordmydesktop',
+                 'simplescreenrecorder','vokoscreen','green-recorder',
+                 'xvidcap','istanbul','byzanz'];
+function startProcessGuard() {
+  return setInterval(() => {
+    const { execSync } = require('child_process');
+    BLOCKED.forEach(p => {
+      try { execSync(`pkill -9 -f "${p}" 2>/dev/null`); } catch(_) {}
+    });
+  }, 5000);
+}
+```
+
+### S11 — Moving Watermark (VideoWatermark.jsx)
+```jsx
+import { useState, useEffect } from 'react';
+export function VideoWatermark({ username }) {
+  const [pos, setPos] = useState({ x: 15, y: 20 });
+  const [stamp, setStamp] = useState('');
+  useEffect(() => {
+    const update = () => {
+      setPos({ x: 5 + Math.random() * 65, y: 5 + Math.random() * 75 });
+      setStamp(new Date().toLocaleString('en-GB'));
+    };
+    update();
+    const t = setInterval(update, 8000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div style={{
+      position: 'absolute', left: `${pos.x}%`, top: `${pos.y}%`,
+      transform: 'rotate(-28deg)', opacity: 0.28,
+      color: '#ff9f3f',           // orange watermark
+      fontSize: '12px', fontFamily: "'JetBrains Mono', monospace",
+      pointerEvents: 'none', userSelect: 'none',
+      transition: 'left 3.5s ease-in-out, top 3.5s ease-in-out',
+      zIndex: 9999, whiteSpace: 'nowrap',
+      textShadow: '0 0 4px rgba(0,0,0,0.8)',
+      lineHeight: 1.4
+    }}>
+      {username}<br/>{stamp}
+    </div>
+  );
+}
+```
+
+### S12 — Binary Integrity Check
+```javascript
+// main/security/integrity.js
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const glob = require('glob');
+const { encrypt, decrypt, deriveKey } = require('./crypto');
+
+const INTEGRITY_FILE = path.join(app.getPath('userData'), 'integrity.enc');
+
+function buildHashes(appPath) {
+  return glob.sync(`${appPath}/**/*.js`, { ignore: '**/node_modules/**' })
+    .map(f => ({ f, h: crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex') }));
+}
+
+function saveIntegrity(hwid) {
+  const hashes = buildHashes(app.getAppPath());
+  fs.writeFileSync(INTEGRITY_FILE, encrypt(JSON.stringify(hashes), deriveKey(hwid)));
+}
+
+function verifyIntegrity(hwid) {
+  if (!fs.existsSync(INTEGRITY_FILE)) return false;
+  const stored = JSON.parse(decrypt(fs.readFileSync(INTEGRITY_FILE,'utf8'), deriveKey(hwid)));
+  const current = buildHashes(app.getAppPath());
+  return stored.every((s,i) => current[i] && current[i].h === s.h);
+}
+```
+
+### S13 — AppArmor Profile
+
+File: `apparmor/cyberlearn` — installed by postinstall.sh
+
+```
+#include <tunables/global>
+profile cyberlearn /opt/CyberLearn/cyberlearn flags=(enforce) {
+  #include <abstractions/base>
+  #include <abstractions/X>
+  #include <abstractions/audio>
+  /opt/CyberLearn/** r,
+  /opt/CyberLearn/cyberlearn ix,
+  /home/*/CyberLearn/** rwk,
+  /tmp/** rw,
+  /proc/*/status r,
+  deny /etc/passwd r,
+  deny /etc/shadow r,
+  deny /etc/sudoers r,
+  deny network inet,
+  deny network inet6,
+  deny network raw,
+  deny /proc/*/mem rw,
+  deny /sys/kernel/security/** r,
+  deny mount,
+}
+```
+
+---
+
+## CERTIFICATE AUTO-GENERATION LOGIC
+
+```javascript
+// Triggered after: lesson marked complete, quiz passed
+// File: main/ipc/courses.js — checkCourseCompletion()
+
+async function checkCourseCompletion(userId, courseId) {
+  const allLessons = db.prepare(`
+    SELECT l.id, l.type FROM lessons l
+    JOIN modules m ON l.module_id = m.id
+    WHERE m.course_id = ?`).all(courseId);
+
+  const completedLessons = db.prepare(`
+    SELECT lesson_id FROM progress
+    WHERE user_id = ? AND completed = 1`).all(userId).map(r => r.lesson_id);
+
+  const quizLessons = allLessons.filter(l => l.type === 'quiz');
+  const allQuizzesPassed = quizLessons.every(l => {
+    const quiz = db.prepare('SELECT id, pass_percent FROM quizzes WHERE lesson_id = ?').get(l.id);
+    if (!quiz) return true;
+    const best = db.prepare(`
+      SELECT MAX(score * 100.0 / max_score) as pct FROM quiz_attempts
+      WHERE user_id = ? AND quiz_id = ? AND passed = 1`).get(userId, quiz.id);
+    return best && best.pct >= quiz.pass_percent;
+  });
+
+  const allLessonsComplete = allLessons.every(l => completedLessons.includes(l.id));
+
+  if (allLessonsComplete && allQuizzesPassed) {
+    await generateCertificate(userId, courseId);
+    await checkAndAwardBadges(userId, courseId);
+  }
+}
+
+async function generateCertificate(userId, courseId) {
+  const existing = db.prepare('SELECT id FROM certificates WHERE user_id=? AND course_id=?')
+    .get(userId, courseId);
+  if (existing) return; // already issued
+
+  const user   = db.prepare('SELECT username FROM users WHERE id=?').get(userId);
+  const course = db.prepare('SELECT title FROM courses WHERE id=?').get(courseId);
+  const settings = getSettings(); // platform_settings
+  const ts = Date.now();
+  const certHash = crypto.createHash('sha256')
+    .update(`${userId}-${courseId}-${ts}`).digest('hex');
+
+  // Generate PDF with pdfkit
+  const pdfPath = path.join(contentDir, 'certificates', `${certHash}.pdf`);
+  await buildCertificatePDF({
+    studentName: user.username,
+    courseName:  course.title,
+    issueDate:   new Date(ts).toLocaleDateString('en-GB'),
+    certHash,
+    orgName:     settings.cert_org_name,
+    sigName:     settings.cert_signature_name,
+    logoPath:    settings.logo_path,
+    outputPath:  pdfPath
+  });
+
+  db.prepare(`INSERT INTO certificates (user_id,course_id,issued_at,cert_hash,pdf_path)
+              VALUES (?,?,?,?,?)`).run(userId, courseId, ts, certHash, pdfPath);
+}
+```
+
+---
+
+## FOLDER STRUCTURE
+
+```
+CyberLearnLMS/
+├── main/
+│   ├── index.js                    ← Electron app entry, security bootstrap
+│   ├── windows.js                  ← BrowserWindow factory with security config
+│   ├── protocol.js                 ← cyberlearn:// custom protocol handler
+│   ├── ipc/
+│   │   ├── auth.js                 ← login, logout, refresh, TOTP
+│   │   ├── courses.js              ← course/module/lesson CRUD + progress
+│   │   ├── quiz.js                 ← quiz get + submit + attempt history
+│   │   ├── certificates.js         ← generate, download, verify
+│   │   ├── badges.js               ← check criteria, award, list
+│   │   ├── admin.js                ← all admin-only handlers
+│   │   ├── files.js                ← file picker + copy to content dir
+│   │   ├── settings.js             ← platform settings CRUD
+│   │   └── license.js              ← HWID check, activation
+│   ├── security/
+│   │   ├── crypto.js               ← AES-256-GCM + PBKDF2 key derivation
+│   │   ├── hwid.js                 ← machine ID + license binding
+│   │   ├── integrity.js            ← binary hash check
+│   │   └── processGuard.js         ← screen recorder killer daemon
+│   ├── db/
+│   │   ├── connection.js           ← better-sqlite3 singleton
+│   │   ├── schema.js               ← Knex migrations (all tables above)
+│   │   └── queries/
+│   │       ├── users.js
+│   │       ├── courses.js
+│   │       ├── quizzes.js
+│   │       ├── certificates.js
+│   │       └── audit.js
+│   └── cert/
+│       └── pdfBuilder.js           ← pdfkit certificate PDF generator
+├── renderer/
+│   ├── public/
+│   │   ├── index.html
+│   │   └── fonts/
+│   │       ├── Inter-Regular.woff2
+│   │       ├── Inter-Medium.woff2
+│   │       └── JetBrainsMono-Regular.woff2
+│   ├── src/
+│   │   ├── main.jsx                ← React entry, Router setup
+│   │   ├── App.jsx                 ← Route definitions, auth guard
+│   │   ├── hooks/
+│   │   │   ├── useIdleTimer.js
+│   │   │   ├── useAuth.js
+│   │   │   └── useProgress.js
+│   │   ├── store/
+│   │   │   └── authStore.js        ← Zustand (bundled) auth state
+│   │   ├── pages/
+│   │   │   ├── Activation.jsx      ← First launch license activation
+│   │   │   ├── Login.jsx           ← Shared login (role-aware)
+│   │   │   ├── AdminTOTP.jsx       ← Step 2 of admin login
+│   │   │   ├── student/
+│   │   │   │   ├── Dashboard.jsx
+│   │   │   │   ├── CourseBrowser.jsx
+│   │   │   │   ├── CoursePlayer.jsx
+│   │   │   │   ├── QuizPage.jsx
+│   │   │   │   ├── Certificates.jsx
+│   │   │   │   └── Badges.jsx
+│   │   │   └── admin/
+│   │   │       ├── Dashboard.jsx
+│   │   │       ├── CourseBuilder.jsx
+│   │   │       ├── QuizBuilder.jsx
+│   │   │       ├── BadgeManager.jsx
+│   │   │       ├── CertificateManager.jsx
+│   │   │       ├── UserManagement.jsx
+│   │   │       └── PlatformSettings.jsx
+│   │   ├── components/
+│   │   │   ├── VideoPlayer.jsx
+│   │   │   ├── VideoWatermark.jsx
+│   │   │   ├── PDFViewer.jsx
+│   │   │   ├── QuizEngine.jsx
+│   │   │   ├── ProgressRing.jsx
+│   │   │   ├── BadgeHex.jsx
+│   │   │   ├── CertCard.jsx
+│   │   │   ├── CourseCard.jsx
+│   │   │   ├── Sidebar.jsx
+│   │   │   └── IdleWarningModal.jsx
+│   │   └── preload/
+│   │       └── index.js            ← IPC whitelist bridge
+├── content/
+│   ├── videos/                     ← Admin-uploaded MP4/MKV (UUID filenames)
+│   ├── pdfs/                       ← Admin-uploaded PDFs (UUID filenames)
+│   ├── badges/                     ← Badge PNG images
+│   ├── certificates/               ← Generated certificate PDFs
+│   └── thumbnails/                 ← Course thumbnail images
+├── data/
+│   └── cyberlearn.db               ← SQLite database (AES fields inside)
+├── apparmor/
+│   └── cyberlearn                  ← AppArmor profile
+├── installer/
+│   └── postinstall.sh              ← AppArmor load, permissions, first-run
+├── tests/
+│   ├── security/
+│   │   ├── crypto.test.js
+│   │   ├── hwid.test.js
+│   │   └── auth.test.js
+│   └── features/
+│       ├── quiz.test.js
+│       └── certificates.test.js
+├── electron-builder.yml
+├── package.json
+├── tailwind.config.js
+├── postcss.config.js
+└── vite.config.js                  ← Vite for renderer build
+```
+
+---
+
+## FIRST LAUNCH / INSTALLER FLOW
+
+```
+1. User runs: sudo dpkg -i cyberlearn.deb
+   postinstall.sh runs:
+   → apparmor_parser -r /etc/apparmor.d/cyberlearn
+   → aa-enforce cyberlearn
+   → chown -R root:root /opt/CyberLearn
+   → chmod 755 /opt/CyberLearn/cyberlearn
+
+2. App launches → integrity check:
+   → If integrity.enc missing (first run): build and save hashes → continue
+   → If integrity.enc exists: verify all hashes → mismatch = show error + quit
+
+3. HWID license check:
+   → No license in DB → show Activation screen (orange gradient, HWID shown)
+   → User enters license key → HWID bound → encrypted stored → continue
+
+4. Admin account check:
+   → No admin users in DB → show Admin Setup Wizard:
+      a. Create admin username + strong password
+      b. Show TOTP QR code → admin scans with authenticator app
+      c. Verify first TOTP code to confirm setup
+      d. Continue to Admin Dashboard
+
+5. Normal launch thereafter:
+   → License check → integrity check → Login screen
+```
+
+---
+
+## BUILD COMMANDS
+
+```bash
+# Development
+npm run dev              # Electron + Vite HMR
+
+# Production build — Kali Linux x64
+npm run build:linux      # electron-builder --linux deb AppImage
+
+# Production build — Raspberry Pi
+npm run build:pi32       # electron-builder --linux deb AppImage --arm
+npm run build:pi64       # electron-builder --linux deb AppImage --arm64
+
+# Run tests
+npm test
+```
+
+`electron-builder.yml`:
+```yaml
+appId: com.cyberlearn.lms
+productName: CyberLearn LMS
+directories:
+  output: dist
+linux:
+  target:
+    - target: deb
+    - target: AppImage
+  category: Education
+  maintainer: CyberLearn
+files:
+  - main/**
+  - renderer/dist/**
+  - content/.gitkeep
+  - data/.gitkeep
+  - apparmor/**
+  - installer/**
+extraResources:
+  - from: installer/postinstall.sh
+    to: postinstall.sh
+```
+
+---
+
+## BUILD ORDER FOR CURSOR AI
+
+Build these in strict sequence. Each phase must have passing tests before moving on.
+
+**Phase 1 — Foundation**
+- [ ] Electron main process with all security config (no nodeIntegration, DevTools off, CSP, setContentProtection, IPC whitelist, custom protocol)
+- [ ] AES-256-GCM crypto module + tests
+- [ ] HWID license system + tests
+- [ ] Binary integrity check
+- [ ] SQLite schema (all tables) via Knex migrations
+- [ ] AppArmor profile
+
+**Phase 2 — Authentication**
+- [ ] Login rate limiting + lockout + audit log
+- [ ] JWT access + refresh token flow
+- [ ] TOTP 2FA for admin
+- [ ] 30-minute idle auto-logout hook
+
+**Phase 3 — Admin Core**
+- [ ] Admin dashboard with stats
+- [ ] Course/module/lesson builder with file picker
+- [ ] Video upload + custom protocol streaming
+- [ ] PDF upload + custom protocol serving
+- [ ] Quiz builder (questions + options)
+- [ ] Admin panel enable/disable setting
+
+**Phase 4 — Student Core**
+- [ ] Student dashboard
+- [ ] Course browser (enrolled courses only)
+- [ ] Video player with watermark (orange, moving, timestamped)
+- [ ] PDF viewer (no download/print)
+- [ ] Progress auto-save every 10 seconds
+
+**Phase 5 — Gamification**
+- [ ] Quiz engine (MCQ/Multi/TrueFalse + timer + feedback)
+- [ ] Badge auto-award system
+- [ ] Certificate auto-generation (pdfkit, orange+green template)
+- [ ] Certificate download + verification page
+
+**Phase 6 — Admin Advanced**
+- [ ] Badge manager UI
+- [ ] Certificate manager UI (manual issue + template config)
+- [ ] Student manager (create/suspend/enroll/progress view)
+- [ ] Platform settings + admin panel disable toggle
+- [ ] Encrypted database backup + restore
+- [ ] Audit log viewer
+
+**Phase 7 — Packaging**
+- [ ] electron-builder config for Kali x64
+- [ ] electron-builder config for Raspberry Pi arm/arm64
+- [ ] postinstall.sh AppArmor setup
+- [ ] End-to-end smoke tests on both platforms
+
+---
+
+## IMPORTANT REMINDERS FOR CURSOR AI
+
+- NEVER import from a URL. Every import is a local file or a package in node_modules.
+- NEVER use `require('http')` or `require('https')` to make outbound requests.
+- ALWAYS verify role === 'admin' inside EVERY admin IPC handler before processing.
+- ALWAYS write to audit_log BEFORE returning any IPC response.
+- ALWAYS use `app.getPath('userData')` for the content/ and data/ directories at runtime.
+- The `content/` folder in source tree is just a placeholder. At runtime it lives in userData.
+- Video.js and PDF.js must be imported from local node_modules, not CDN.
+- Tailwind CSS must be built via PostCSS at build time, not loaded from CDN.
+- All bundled fonts loaded via CSS @font-face pointing to local woff2 files.
+- Test on Raspberry Pi: use `--arm` flag; Electron Chromium has arm builds available.
+- AES master key is NEVER written to disk — derived fresh from HWID on each app launch.
+
+---
+
+*This is the complete, final, production-grade specification. Paste this entire document into Cursor AI as your project prompt. Start with Phase 1 and do not skip any security step.*
+
+
+# ============================================================
+# ADVANCED FEATURES EXTENSION — ELITE OFFLINE LMS UPGRADE
+# Added on top of base specification above
+# ============================================================
+
+---
+
+## ADVANCED FEATURE 1 — OFFLINE AI STUDY ASSISTANT (Local LLM)
+
+Run a small quantized LLM (Phi-3 Mini 3.8B GGUF via llama.cpp) fully
+offline inside the app. Students get an AI tutor they can ask questions
+about course content. ZERO cloud. ZERO API calls.
+
+### Implementation
+
+```javascript
+// main/ai/localLLM.js
+// Use llama-node (Node.js binding for llama.cpp)
+// Model: Phi-3-mini-4k-instruct.Q4_K_M.gguf (~2.4GB, bundled in content/models/)
+// On Raspberry Pi: use Q2_K quantization (~1.4GB) for memory constraints
+
+const { LLM } = require('llama-node');
+const { LLamaRS } = require('@llama-node/llama-rs');
+
+class OfflineAI {
+  constructor() {
+    this.llm = new LLM(LLamaRS);
+    this.loaded = false;
+  }
+
+  async load(modelPath) {
+    await this.llm.load({
+      modelPath,
+      nCtx: 2048,
+      nThreads: 4,     // adjust for Pi: use 2
+      useMlock: false
+    });
+    this.loaded = true;
+  }
+
+  async ask(systemPrompt, userMessage, onToken) {
+    // Streaming token callback for real-time response display
+    await this.llm.createCompletion({
+      prompt: `<|system|>${systemPrompt}<|end|><|user|>${userMessage}<|end|><|assistant|>`,
+      maxTokens: 512,
+      temperature: 0.7,
+      onToken: (token) => onToken(token)
+    });
+  }
+}
+
+// System prompt scoped to current lesson/course context:
+const SYSTEM_PROMPT = (courseName, lessonTitle) =>
+  `You are a cybersecurity tutor for the course "${courseName}", lesson "${lessonTitle}".
+   Answer only questions related to this lesson's topic. Be concise and educational.
+   You are running completely offline. Never mention internet resources or URLs.`;
+```
+
+### UI: AI Chat Panel
+- Slide-in panel on right side of CoursePlayer
+- Toggle button: blue robot icon
+- Chat history stored in SQLite: `ai_chat(id, user_id, lesson_id, role, message, timestamp)`
+- Streaming text display (character by character as tokens arrive)
+- Context: automatically includes current lesson title + course name in system prompt
+- Admin can ENABLE/DISABLE AI assistant per course in CourseBuilder
+- Model loading progress bar on first use (one-time load, stays in memory)
+- Pi-aware: auto-detects arm architecture, loads Q2_K model variant
+
+---
+
+## ADVANCED FEATURE 2 — INTERACTIVE TERMINAL SANDBOX (Offline)
+
+Built-in sandboxed terminal for cybersecurity hands-on practice.
+Students run real Linux commands in a controlled isolated environment
+without leaving the LMS.
+
+### Implementation
+
+```javascript
+// main/sandbox/terminal.js
+// Uses node-pty (bundled) for real PTY in a restricted shell
+// Runs as a dedicated non-privileged user: 'cyberlearn-sandbox'
+// Created by postinstall.sh: useradd -r -s /bin/rbash cyberlearn-sandbox
+
+const pty = require('node-pty');
+
+class SandboxTerminal {
+  constructor(userId, lessonId) {
+    this.userId = userId;
+    this.lessonId = lessonId;
+    this.commandLog = []; // stored in audit_log
+  }
+
+  spawn() {
+    // Restricted bash: no network, no sudo, limited PATH
+    this.pty = pty.spawn('sudo', [
+      '-u', 'cyberlearn-sandbox',
+      '/bin/rbash'
+    ], {
+      name: 'xterm-256color',
+      cols: 80, rows: 24,
+      env: {
+        HOME: '/tmp/cyberlearn-sandbox',
+        PATH: '/usr/bin:/bin',
+        TERM: 'xterm-256color',
+        // Explicitly NO network tools in PATH
+      }
+    });
+
+    this.pty.onData(data => {
+      // Stream data to renderer via IPC
+      mainWindow.webContents.send('terminal:data', { data });
+    });
+  }
+
+  write(input) {
+    this.commandLog.push({ input, ts: Date.now() });
+    this.pty.write(input);
+    // Log every command to audit_log
+    writeAuditLog(this.userId, 'TERMINAL_INPUT',
+      `lesson:${this.lessonId} cmd:${input.trim()}`);
+  }
+
+  resize(cols, rows) { this.pty.resize(cols, rows); }
+  kill() { this.pty.kill(); }
+}
+```
+
+### Terminal Lesson Type
+- Add new lesson type: `type: 'terminal'`
+- Admin creates terminal lesson with:
+  - Challenge description (rich text)
+  - Expected command(s) or expected output pattern (regex)
+  - Hint system (up to 3 hints, revealed one at a time)
+  - Validation script (bash script that checks if task is complete)
+- Student sees: split view — challenge description top, terminal bottom
+- xterm.js (bundled local) renders the terminal in renderer
+- Auto-validation: run check script after each command, mark complete if passes
+- Tab completion, arrow key history work via node-pty PTY
+
+```javascript
+// Database addition:
+// terminal_lessons(id, lesson_id, description, validation_script,
+//                  expected_output_regex, hint1, hint2, hint3)
+```
+
+---
+
+## ADVANCED FEATURE 3 — ADAPTIVE LEARNING ENGINE
+
+Tracks every student's performance and dynamically recommends what to
+study next. Fully local algorithm, no ML model needed.
+
+### Implementation
+
+```javascript
+// main/adaptive/engine.js
+
+class AdaptiveLearningEngine {
+
+  // Score each lesson for a student based on:
+  // - Quiz score history (weighted recent)
+  // - Time spent vs expected duration (engagement)
+  // - Number of retries
+  // - Time since last access (spaced repetition)
+  scoreLesson(userId, lessonId) {
+    const progress = db.prepare(
+      'SELECT * FROM progress WHERE user_id=? AND lesson_id=?').get(userId, lessonId);
+    const attempts = db.prepare(
+      `SELECT score, max_score, attempted_at FROM quiz_attempts
+       WHERE user_id=? ORDER BY attempted_at DESC LIMIT 5`).all(userId);
+
+    let score = 100;
+
+    // Penalize low quiz scores
+    if (attempts.length > 0) {
+      const avgPct = attempts.reduce((a,b) => a + (b.score/b.max_score*100), 0) / attempts.length;
+      if (avgPct < 50) score -= 40;
+      else if (avgPct < 70) score -= 20;
+    }
+
+    // Spaced repetition: boost if not accessed in 3+ days
+    if (progress && progress.last_accessed) {
+      const daysSince = (Date.now() - progress.last_accessed) / 86400000;
+      if (daysSince > 7) score += 50;
+      else if (daysSince > 3) score += 25;
+    }
+
+    // Boost incomplete lessons
+    if (!progress || !progress.completed) score += 30;
+
+    return score;
+  }
+
+  // Returns ordered list of recommended lessons for student
+  getRecommendations(userId, courseId, limit = 5) {
+    const lessons = db.prepare(`
+      SELECT l.id, l.title, l.type, m.title as module_title
+      FROM lessons l JOIN modules m ON l.module_id = m.id
+      WHERE m.course_id = ?`).all(courseId);
+
+    return lessons
+      .map(l => ({ ...l, priority: this.scoreLesson(userId, l.id) }))
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, limit);
+  }
+
+  // Weak area detection: topics where student consistently scores below 70%
+  getWeakAreas(userId) {
+    return db.prepare(`
+      SELECT q.title, AVG(a.score * 100.0 / a.max_score) as avg_pct, COUNT(*) as attempts
+      FROM quiz_attempts a
+      JOIN quizzes q ON a.quiz_id = q.id
+      WHERE a.user_id = ?
+      GROUP BY q.id
+      HAVING avg_pct < 70
+      ORDER BY avg_pct ASC`).all(userId);
+  }
+}
+```
+
+### UI Display
+- "Study Recommendations" card on Student Dashboard (blue gradient card)
+- "Weak Areas" section: orange warning cards listing topics needing review
+- "Next Up" banner at top of CoursePlayer: AI-suggested next lesson
+- Spaced repetition reminders: "You haven't reviewed [Lesson] in 5 days"
+
+---
+
+## ADVANCED FEATURE 4 — OFFLINE VIDEO NOTES & BOOKMARKS
+
+Students can take timestamped notes while watching videos. All stored
+locally. Can export notes as PDF.
+
+### Implementation
+
+```javascript
+// Database additions:
+// video_notes(id, user_id, lesson_id, timestamp_sec, note_text, created_at)
+// video_bookmarks(id, user_id, lesson_id, timestamp_sec, label, created_at)
+```
+
+### UI
+- Floating notes panel alongside video player (toggle with 'N' key)
+- "Add Note at [current time]" button — opens inline text input
+- Notes list below video: click any note → jumps video to that timestamp
+- Bookmark button (star icon) in video controls → saves current timestamp
+- Bookmark markers appear on video progress bar (orange dots)
+- Export Notes button → generates PDF via pdfkit:
+  - Course name, lesson title
+  - Each note: [MM:SS] note text
+  - Each bookmark: [MM:SS] label
+- Admin can view all student notes per lesson (for teaching insights)
+
+---
+
+## ADVANCED FEATURE 5 — DARK/LIGHT/HIGH-CONTRAST THEME SWITCHER
+
+Students and admin can choose their visual theme. All themes are
+pre-compiled Tailwind CSS — no runtime style injection.
+
+### Themes
+
+```javascript
+// Three themes, all offline:
+
+// 1. DARK (default) — Orange + Blue + Green on dark bg
+// 2. LIGHT — same accent colors on white/light-gray bg
+// 3. HIGH CONTRAST — pure black bg, bright orange/green/white,
+//    minimum 7:1 contrast ratio — WCAG AAA compliant
+//    (important for students with visual impairments)
+
+// Stored in platform_settings per user:
+// user_preferences(id, user_id, theme, font_size, video_quality)
+
+// Applied via data-theme attribute on <html>:
+// data-theme="dark" | data-theme="light" | data-theme="high-contrast"
+```
+
+### Font Size Control
+- Three sizes: Normal (16px base) | Large (18px) | Extra Large (20px)
+- All sizes use rem units — scaling works correctly throughout
+- Stored in user_preferences table
+
+---
+
+## ADVANCED FEATURE 6 — STUDENT LEARNING ANALYTICS DASHBOARD
+
+Deep per-student stats. Students see their own. Admin sees everyone's.
+
+### Metrics Tracked
+```javascript
+// All computed from existing tables — no new data collection
+
+// Per student:
+// - Daily study time (minutes) — 30-day chart (bar, orange bars)
+// - Course completion velocity (lessons/day trend)
+// - Quiz score trend over time (line chart, blue line)
+// - Strongest vs weakest topics (green/orange horizontal bars)
+// - Total study time all-time
+// - Average quiz score all-time
+// - Streak: consecutive days with any activity (fire icon, orange)
+// - Predicted completion date per course (based on pace)
+
+// Admin per-course:
+// - Enrollment funnel: enrolled → started → 50% → completed
+// - Question difficulty analysis: which questions most failed
+// - Drop-off points: which lessons have lowest completion rate
+// - Average time-to-complete per course
+```
+
+### UI Components
+- All charts: Chart.js 4 (bundled local), dark theme
+- Student analytics page: `/student/analytics`
+- Admin course analytics: expandable panel per course in AdminDashboard
+- Export report button: generates PDF analytics report via pdfkit
+
+---
+
+## ADVANCED FEATURE 7 — OFFLINE CONTENT PACKAGING SYSTEM
+
+Admin can package courses into encrypted `.cyberpack` files for offline
+distribution. Install new courses by importing a `.cyberpack` file — no
+internet needed.
+
+### Implementation
+
+```javascript
+// main/ipc/packages.js
+
+// EXPORT: Admin exports a course as encrypted .cyberpack
+async function exportCourse(courseId, outputPath) {
+  const course    = db.prepare('SELECT * FROM courses WHERE id=?').get(courseId);
+  const modules   = db.prepare('SELECT * FROM modules WHERE course_id=?').all(courseId);
+  const lessons   = /* get all lessons with content paths */;
+  const quizzes   = /* get all quizzes + questions + options */;
+  const badges    = /* get badges tied to this course */;
+
+  // Build manifest JSON
+  const manifest = { version: '1.0', course, modules, lessons, quizzes, badges };
+
+  // Create tar archive: manifest.json + all video/pdf files
+  const tar = require('tar'); // bundled
+  const tmpDir = path.join(app.getPath('temp'), `cyberpack-${courseId}`);
+  fs.writeFileSync(path.join(tmpDir, 'manifest.json'), JSON.stringify(manifest));
+  // copy content files into tmpDir
+
+  // Encrypt the archive with AES-256-GCM using HWID key
+  const archivePath = path.join(tmpDir, 'archive.tar');
+  await tar.create({ file: archivePath, cwd: tmpDir }, ['manifest.json', 'content/']);
+  const encrypted = encryptFile(archivePath, masterKey);
+  fs.writeFileSync(outputPath, encrypted); // .cyberpack file
+  fs.rmSync(tmpDir, { recursive: true });
+}
+
+// IMPORT: Admin imports a .cyberpack file
+async function importCourse(packPath) {
+  const encrypted = fs.readFileSync(packPath);
+  const decrypted = decryptFile(encrypted, masterKey);
+  // extract tar → read manifest.json → INSERT into DB → copy content files
+}
+```
+
+### UI
+- Admin → Platform Settings → "Course Packages" section
+- Export: select course → pick save location → generates `CourseName_v1.cyberpack`
+- Import: file picker → select .cyberpack → shows manifest preview → confirm import
+- Package version checking: warn if package was built on different app version
+
+---
+
+## ADVANCED FEATURE 8 — PROCTORED QUIZ MODE
+
+Optional admin setting per quiz: enable proctored mode. Detects and logs
+suspicious behavior during quiz.
+
+### What It Monitors (all local, no camera)
+```javascript
+// main/security/proctor.js
+
+class QuizProctor {
+  constructor(userId, quizId) {
+    this.events = [];
+    this.userId = userId;
+    this.quizId = quizId;
+  }
+
+  // 1. Window focus loss — student switched away from app
+  // Detected via: mainWindow.on('blur')
+  logFocusLoss(timestamp) {
+    this.events.push({ type: 'FOCUS_LOSS', timestamp });
+  }
+
+  // 2. Unusual time gaps — student paused for >5 minutes mid-quiz
+  logTimeGap(seconds) {
+    if (seconds > 300) this.events.push({ type: 'TIME_GAP', seconds });
+  }
+
+  // 3. Rapid answer changes — answered then changed >3 times per question
+  logAnswerChange(questionId, count) {
+    if (count > 3) this.events.push({ type: 'ANSWER_CHANGES', questionId, count });
+  }
+
+  // 4. Quiz completed too fast — under 20% of expected time
+  logSpeedFlag(expectedSec, actualSec) {
+    if (actualSec < expectedSec * 0.2)
+      this.events.push({ type: 'SPEED_FLAG', expectedSec, actualSec });
+  }
+
+  // Save all events to DB after quiz submission
+  save() {
+    db.prepare(`INSERT INTO quiz_proctoring
+      (user_id, quiz_id, events_json, flagged, created_at)
+      VALUES (?,?,?,?,?)`).run(
+        this.userId, this.quizId,
+        JSON.stringify(this.events),
+        this.events.length > 0 ? 1 : 0,
+        Date.now()
+    );
+  }
+}
+
+// Database addition:
+// quiz_proctoring(id, user_id, quiz_id, events_json, flagged, created_at)
+```
+
+### Admin UI
+- Quiz attempts table shows 🚩 flag icon if proctoring events detected
+- Click flag → modal shows full event timeline
+- Admin can mark attempt as "reviewed" or "invalidated"
+- Flagged attempts excluded from leaderboard
+
+---
+
+## ADVANCED FEATURE 9 — COURSE COMPLETION LEADERBOARD
+
+Friendly competition between students. Fully local. Per-course and
+all-time leaderboards.
+
+### Implementation
+
+```javascript
+// main/ipc/leaderboard.js
+
+function getCourseLeaderboard(courseId, limit = 10) {
+  return db.prepare(`
+    SELECT
+      u.username,
+      e.completed_at,
+      COUNT(DISTINCT p.lesson_id) as lessons_done,
+      ROUND(AVG(qa.score * 100.0 / qa.max_score), 1) as avg_quiz_score,
+      SUM(p.watched_seconds) / 60 as study_minutes,
+      -- Rank score: completion + speed + quiz performance
+      (
+        CASE WHEN e.completed_at IS NOT NULL THEN 1000 ELSE 0 END +
+        ROUND(AVG(qa.score * 100.0 / qa.max_score) * 5, 0) +
+        (SUM(p.watched_seconds) / 60)
+      ) as rank_score
+    FROM enrollments e
+    JOIN users u ON e.user_id = u.id
+    LEFT JOIN progress p ON p.user_id = e.user_id
+    LEFT JOIN lessons l ON p.lesson_id = l.id
+    LEFT JOIN modules m ON l.module_id = m.id AND m.course_id = e.course_id
+    LEFT JOIN quizzes qz ON qz.lesson_id = l.id
+    LEFT JOIN quiz_attempts qa ON qa.quiz_id = qz.id AND qa.user_id = e.user_id
+    WHERE e.course_id = ?
+    GROUP BY e.user_id
+    ORDER BY rank_score DESC
+    LIMIT ?`).all(courseId, limit);
+}
+```
+
+### UI
+- Leaderboard page per course: `/student/course/:id/leaderboard`
+- Podium display: top 3 with gold/silver/bronze styling
+- Table: rank, username (anonymized option), score, completion status
+- Current student row highlighted in orange
+- Admin can toggle leaderboard visibility per course
+- "Anonymous Mode" setting: shows initials only instead of full username
+
+---
+
+## ADVANCED FEATURE 10 — OFFLINE NOTIFICATION SYSTEM
+
+In-app notifications for students and admin. No push, no internet.
+Event-driven, stored in SQLite, polled every 30 seconds.
+
+### Events That Trigger Notifications
+
+```javascript
+// Student notifications:
+// - New course enrolled by admin → "You've been enrolled in [Course]"
+// - Badge earned → "🏆 You earned the [Badge Name] badge!"
+// - Certificate ready → "🎓 Your certificate for [Course] is ready"
+// - Quiz attempt: passed/failed → "✅ Passed! [Score]%" / "❌ Not passed. Try again."
+// - Reminder: not accessed course in 3 days → "📚 Continue [Course]?"
+
+// Admin notifications:
+// - Student completed a course → "[Student] completed [Course]"
+// - Student failed quiz 3 times → "[Student] needs help with [Quiz]"
+// - Low storage warning → "⚠️ Content drive below 1GB free"
+
+// Database:
+// notifications(id, user_id, type, title, body, is_read, created_at, action_route)
+```
+
+### UI
+- Bell icon in header with unread count badge (orange dot)
+- Dropdown: most recent 10 notifications
+- Click notification → navigate to relevant page (action_route)
+- "Mark all read" button
+- Full notifications page: `/notifications`
+- Poll every 30 seconds via setInterval in renderer (IPC call: `notifications:get-unread`)
+
+---
+
+## ADVANCED FEATURE 11 — ADMIN OFFLINE BACKUP SCHEDULER
+
+Automatic encrypted database + content backups on a schedule. No cloud.
+Saves to a local folder chosen by admin.
+
+### Implementation
+
+```javascript
+// main/backup/scheduler.js
+const { CronJob } = require('cron'); // bundled
+
+class BackupScheduler {
+  constructor(settings) {
+    this.settings = settings; // from platform_settings table
+  }
+
+  start() {
+    // Admin configures: daily / weekly / on-close
+    const schedule = this.settings.backup_schedule; // '0 2 * * *' = daily 2am
+
+    if (schedule === 'on-close') {
+      app.on('before-quit', () => this.runBackup());
+      return;
+    }
+
+    this.job = new CronJob(schedule, () => this.runBackup(), null, true);
+  }
+
+  async runBackup() {
+    const dest   = this.settings.backup_path; // user-chosen local folder
+    const hwid   = getHWID();
+    const ts     = new Date().toISOString().replace(/[:.]/g, '-');
+    const dbPath = path.join(app.getPath('userData'), 'data', 'cyberlearn.db');
+
+    // 1. Encrypt SQLite file with AES-256-GCM
+    const encDb = encryptFile(fs.readFileSync(dbPath), deriveKey(hwid));
+    fs.writeFileSync(path.join(dest, `backup-${ts}.cyberdb`), encDb);
+
+    // 2. Optionally backup content folder (videos/PDFs) — optional, large
+    if (this.settings.backup_include_content === '1') {
+      // tar + encrypt content/
+    }
+
+    // 3. Log backup event
+    writeAuditLog(null, 'AUTO_BACKUP', `Saved to ${dest}/backup-${ts}.cyberdb`);
+
+    // 4. Rotate: keep only last N backups
+    const maxBackups = parseInt(this.settings.backup_keep_count || '7');
+    const existing = fs.readdirSync(dest)
+      .filter(f => f.startsWith('backup-') && f.endsWith('.cyberdb'))
+      .sort();
+    while (existing.length > maxBackups) {
+      fs.unlinkSync(path.join(dest, existing.shift()));
+    }
+  }
+}
+```
+
+### Admin UI (Platform Settings → Backup)
+- Schedule picker: Daily at [time] | Weekly on [day] | On App Close | Manual only
+- Backup folder picker (Electron dialog)
+- Keep last N backups spinner (default 7)
+- Include content files toggle (with size warning)
+- "Run Backup Now" button
+- Backup history table: filename, size, date, status
+
+---
+
+## ADVANCED FEATURE 12 — STUDENT STUDY PLAN GENERATOR
+
+Admin or student can generate a structured week-by-week study plan for
+any course. Computed locally from course content metadata.
+
+### Implementation
+
+```javascript
+// main/adaptive/studyPlan.js
+
+function generateStudyPlan(courseId, hoursPerWeek, startDate) {
+  const lessons = db.prepare(`
+    SELECT l.id, l.title, l.type, l.duration_seconds, m.title as module
+    FROM lessons l JOIN modules m ON l.module_id = m.id
+    WHERE m.course_id = ? ORDER BY m.order_index, l.order_index`).all(courseId);
+
+  const totalMinutes = lessons.reduce((sum, l) => {
+    let mins = l.duration_seconds / 60;
+    if (l.type === 'quiz') mins = 15;     // estimate 15 min per quiz
+    if (l.type === 'terminal') mins = 30; // estimate 30 min per lab
+    return sum + mins;
+  }, 0);
+
+  const minutesPerWeek = hoursPerWeek * 60;
+  const weeksNeeded    = Math.ceil(totalMinutes / minutesPerWeek);
+
+  // Distribute lessons across weeks respecting module boundaries
+  const weeks = [];
+  let weekLessons = [], weekMins = 0, weekNum = 1;
+
+  for (const lesson of lessons) {
+    const mins = lesson.duration_seconds / 60 || 20;
+    if (weekMins + mins > minutesPerWeek && weekLessons.length > 0) {
+      weeks.push({ week: weekNum++, lessons: weekLessons, estimatedMins: weekMins });
+      weekLessons = []; weekMins = 0;
+    }
+    weekLessons.push(lesson);
+    weekMins += mins;
+  }
+  if (weekLessons.length) weeks.push({ week: weekNum, lessons: weekLessons, estimatedMins: weekMins });
+
+  return { totalMinutes, weeksNeeded, weeks, startDate };
+}
+```
+
+### UI
+- Admin: "Generate Study Plan" button per enrolled student in UserManagement
+- Student: "My Study Plan" tab on Dashboard
+- Weekly view: each week is a collapsible card
+- Lessons listed with estimated time + type icon
+- Progress overlay: completed lessons show green checkmark
+- Export as PDF button → printable weekly schedule via pdfkit
+
+---
+
+## ADVANCED FEATURE 13 — MULTI-LANGUAGE UI SUPPORT (OFFLINE i18n)
+
+Support English, Arabic (RTL), French, and Hindi UI — all bundled.
+No translation API calls.
+
+### Implementation
+
+```javascript
+// renderer/src/i18n/index.js
+// All translation JSON files bundled locally at build time
+// renderer/src/i18n/en.json
+// renderer/src/i18n/ar.json  (RTL — sets dir="rtl" on <html>)
+// renderer/src/i18n/fr.json
+// renderer/src/i18n/hi.json
+
+import en from './en.json';
+import ar from './ar.json';
+import fr from './fr.json';
+import hi from './hi.json';
+
+const translations = { en, ar, fr, hi };
+
+export function t(key, lang) {
+  return translations[lang]?.[key] || translations['en'][key] || key;
+}
+
+// RTL support: when lang === 'ar', set document.documentElement.dir = 'rtl'
+// Tailwind RTL plugin (bundled): automatically flips margins, padding,
+// text alignment, flex direction for RTL
+```
+
+### Admin UI
+- Platform Settings → Language → dropdown: English | عربي | Français | हिंदी
+- Separate language setting for Admin UI vs Student UI
+- Stored in platform_settings: admin_lang, student_lang
+- Applied on window load from settings
+
+---
+
+## ADVANCED FEATURE 14 — CONTENT INTEGRITY VERIFICATION
+
+Every video and PDF file has a SHA-256 hash stored at upload time.
+On every access, the file is verified before serving to student.
+Detects tampering, corruption, or unauthorized file replacement.
+
+### Implementation
+
+```javascript
+// main/security/contentIntegrity.js
+
+// At upload time (admin uploads file):
+function hashAndStoreContent(filePath, lessonId) {
+  const hash = crypto.createHash('sha256')
+    .update(fs.readFileSync(filePath)).digest('hex');
+  db.prepare('UPDATE lessons SET content_hash=? WHERE id=?').run(hash, lessonId);
+  return hash;
+}
+
+// Before serving file via cyberlearn:// protocol:
+function verifyContentFile(filePath, expectedHash) {
+  const actual = crypto.createHash('sha256')
+    .update(fs.readFileSync(filePath)).digest('hex');
+  if (actual !== expectedHash) {
+    writeAuditLog(null, 'CONTENT_TAMPER_DETECTED', filePath);
+    throw new Error('FILE_INTEGRITY_VIOLATION');
+  }
+  return true;
+}
+
+// Database addition: content_hash TEXT column in lessons table
+// Protocol handler checks hash before streaming any file
+```
+
+### UI Behavior
+- If integrity check fails: student sees error card (red) "Content file is corrupted. Please contact your administrator."
+- Admin sees alert in dashboard: "⚠️ Integrity violation detected for: [Lesson Title]"
+- Admin can re-upload the file to fix it
+
+---
+
+## ADVANCED FEATURE 15 — RICH STUDENT PROFILE SYSTEM
+
+Each student has a profile page visible to themselves and admin.
+
+### Profile Fields
+```javascript
+// user_profiles(id, user_id, display_name, bio, avatar_color_hex,
+//               total_study_minutes, courses_completed, badges_earned,
+//               join_date, last_active)
+
+// Avatar: generated from initials + stored color (no image upload needed)
+// Color randomly assigned on account creation from a palette of 12 colors
+```
+
+### Profile Page Features
+- Avatar circle (initials on colored background — orange/blue/green variants)
+- Display name (editable by student)
+- Member since date
+- Stats row: Courses Enrolled | Completed | Badges | Certificates
+- Activity calendar (GitHub-style heatmap — green squares, darker = more active)
+  Built from progress table `last_accessed` timestamps
+- Recent badges grid
+- Admin can view any student's profile from UserManagement
+
+### Activity Heatmap
+```javascript
+// Compute from progress table:
+// SELECT DATE(last_accessed/1000, 'unixepoch') as day, COUNT(*) as count
+// FROM progress WHERE user_id = ? AND last_accessed > [52 weeks ago]
+// GROUP BY day
+// Render as 52x7 grid of colored squares in SVG — local, no library needed
+```
+
+---
+
+## UPDATED DATABASE ADDITIONS (for advanced features)
+
+```sql
+-- AI Chat History
+CREATE TABLE ai_chat (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id),
+  lesson_id INTEGER REFERENCES lessons(id),
+  role TEXT CHECK(role IN ('user','assistant')),
+  message TEXT NOT NULL,
+  timestamp INTEGER NOT NULL
+);
+
+-- Video Notes
+CREATE TABLE video_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id),
+  lesson_id INTEGER REFERENCES lessons(id),
+  timestamp_sec INTEGER NOT NULL,
+  note_text TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+-- Video Bookmarks
+CREATE TABLE video_bookmarks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id),
+  lesson_id INTEGER REFERENCES lessons(id),
+  timestamp_sec INTEGER NOT NULL,
+  label TEXT,
+  created_at INTEGER NOT NULL
+);
+
+-- Terminal Lessons
+CREATE TABLE terminal_lessons (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lesson_id INTEGER REFERENCES lessons(id),
+  description TEXT NOT NULL,
+  validation_script TEXT,
+  expected_output_regex TEXT,
+  hint1 TEXT, hint2 TEXT, hint3 TEXT,
+  difficulty TEXT CHECK(difficulty IN ('easy','medium','hard'))
+);
+
+-- Quiz Proctoring
+CREATE TABLE quiz_proctoring (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id),
+  quiz_id INTEGER REFERENCES quizzes(id),
+  events_json TEXT NOT NULL,
+  flagged INTEGER DEFAULT 0,
+  reviewed INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+-- Notifications
+CREATE TABLE notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id),
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  is_read INTEGER DEFAULT 0,
+  action_route TEXT,
+  created_at INTEGER NOT NULL
+);
+
+-- User Preferences
+CREATE TABLE user_preferences (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id) UNIQUE,
+  theme TEXT DEFAULT 'dark',
+  font_size TEXT DEFAULT 'normal',
+  language TEXT DEFAULT 'en',
+  ai_enabled INTEGER DEFAULT 1,
+  notifications_enabled INTEGER DEFAULT 1
+);
+
+-- User Profiles
+CREATE TABLE user_profiles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id) UNIQUE,
+  display_name TEXT,
+  bio TEXT,
+  avatar_color_hex TEXT DEFAULT '#f97316'
+);
+
+-- Content hash (add column to lessons table)
+ALTER TABLE lessons ADD COLUMN content_hash TEXT;
+
+-- Leaderboard cache (optional, rebuilt on demand)
+CREATE TABLE leaderboard_cache (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id INTEGER REFERENCES courses(id),
+  user_id INTEGER REFERENCES users(id),
+  rank_score REAL,
+  computed_at INTEGER
+);
+```
+
+---
+
+## UPDATED FOLDER STRUCTURE (additions only)
+
+```
+CyberLearnLMS/
+├── main/
+│   ├── ai/
+│   │   └── localLLM.js              ← llama-node Phi-3 wrapper
+│   ├── sandbox/
+│   │   └── terminal.js              ← node-pty sandboxed shell
+│   ├── adaptive/
+│   │   ├── engine.js                ← recommendation + weak area detection
+│   │   └── studyPlan.js             ← study plan generator
+│   ├── backup/
+│   │   └── scheduler.js             ← cron backup scheduler
+│   └── ipc/
+│       ├── ai.js                    ← AI chat IPC handlers
+│       ├── terminal.js              ← terminal IPC handlers
+│       ├── leaderboard.js           ← leaderboard queries
+│       ├── notifications.js         ← notification CRUD
+│       └── packages.js              ← .cyberpack export/import
+├── renderer/
+│   ├── src/
+│   │   ├── i18n/                    ← en.json, ar.json, fr.json, hi.json
+│   │   ├── pages/
+│   │   │   └── student/
+│   │   │       ├── Analytics.jsx    ← personal learning analytics
+│   │   │       ├── StudyPlan.jsx    ← generated study plan
+│   │   │       ├── Profile.jsx      ← student profile + heatmap
+│   │   │       ├── Leaderboard.jsx  ← course leaderboard
+│   │   │       └── Notifications.jsx
+│   │   └── components/
+│   │       ├── AIChat.jsx           ← streaming AI tutor panel
+│   │       ├── Terminal.jsx         ← xterm.js terminal component
+│   │       ├── VideoNotes.jsx       ← timestamped notes panel
+│   │       ├── ActivityHeatmap.jsx  ← SVG GitHub-style heatmap
+│   │       ├── StudyPlanCard.jsx
+│   │       └── NotificationBell.jsx
+└── content/
+    └── models/
+        ├── phi3-mini.Q4_K_M.gguf   ← Kali Linux model (x64)
+        └── phi3-mini.Q2_K.gguf     ← Raspberry Pi model (arm)
+```
+
+---
+
+## UPDATED IPC WHITELIST (append to existing list)
+
+```javascript
+// Add these to the ALLOWED array in preload.js:
+'ai:ask', 'ai:history', 'ai:clear',
+'terminal:spawn', 'terminal:write', 'terminal:resize', 'terminal:kill',
+'notes:save', 'notes:get', 'notes:export',
+'bookmarks:save', 'bookmarks:get',
+'analytics:personal', 'analytics:course',
+'leaderboard:course', 'leaderboard:all',
+'notifications:get-unread', 'notifications:mark-read', 'notifications:mark-all-read',
+'studyplan:generate', 'studyplan:get',
+'packages:export', 'packages:import',
+'backup:run', 'backup:list',
+'profile:get', 'profile:update',
+'prefs:get', 'prefs:update',
+'integrity:verify-content'
+```
+
+---
+
+## UPDATED BUILD ORDER — PHASE 8 (Advanced Features)
+
+After completing Phases 1-7 from original spec, add:
+
+**Phase 8A — Quick wins (add first)**
+- [ ] Theme switcher (dark/light/high-contrast) + font size control
+- [ ] User preferences table + UI settings page
+- [ ] Video notes + bookmarks system
+- [ ] In-app notifications (bell + poll)
+- [ ] Student profile page + activity heatmap
+
+**Phase 8B — Analytics + Gamification**
+- [ ] Student learning analytics dashboard + charts
+- [ ] Adaptive recommendation engine
+- [ ] Study plan generator + UI
+- [ ] Course leaderboard
+- [ ] Admin proctored quiz mode
+
+**Phase 8C — Advanced Infrastructure**
+- [ ] Content integrity hashing (add to upload + protocol handler)
+- [ ] .cyberpack export/import system
+- [ ] Automated backup scheduler
+- [ ] Multi-language i18n (en + ar RTL + fr + hi)
+
+**Phase 8D — AI + Terminal (most complex, do last)**
+- [ ] Sandboxed terminal (node-pty + xterm.js + rbash)
+- [ ] Terminal lesson type in admin builder + validation engine
+- [ ] Local LLM integration (llama-node + Phi-3 Mini)
+- [ ] AI chat panel in CoursePlayer
+
+---
+
+*End of advanced features extension. This entire document (base spec +
+advanced features) is your complete Cursor AI prompt. The software built
+from this spec will be world-class, fully offline, and more feature-rich
+than most commercial LMS platforms.*
