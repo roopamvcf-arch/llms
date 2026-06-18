@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: CyberLearn LMS API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: auth
+  - name: courses
+  - name: modules
+  - name: lessons
+  - name: progress
+  - name: quizzes
+  - name: badges
+  - name: certificates
+  - name: admin
+  - name: notifications
+  - name: analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,1198 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── AUTH ──────────────────────────────────────────────────────────────────
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login response (student auth or admin totp challenge)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/verify-totp:
+    post:
+      operationId: verifyTotp
+      tags: [auth]
+      summary: Verify admin TOTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TotpVerifyInput"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccess"
+        "401":
+          description: Invalid code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [auth]
+      summary: Refresh access token
+      responses:
+        "200":
+          description: New access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "204":
+          description: Logged out
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /auth/setup-totp:
+    post:
+      operationId: setupTotp
+      tags: [auth]
+      summary: Setup TOTP for admin
+      responses:
+        "200":
+          description: TOTP QR code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TotpSetupResponse"
+
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInput"
+      responses:
+        "204":
+          description: Password changed
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── COURSES ───────────────────────────────────────────────────────────────
+
+  /courses:
+    get:
+      operationId: listCourses
+      tags: [courses]
+      summary: List courses
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of courses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Course"
+    post:
+      operationId: createCourse
+      tags: [courses]
+      summary: Create course (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Course"
+
+  /courses/{id}:
+    get:
+      operationId: getCourse
+      tags: [courses]
+      summary: Get course with modules and lessons
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Course detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateCourse
+      tags: [courses]
+      summary: Update course (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Course"
+    delete:
+      operationId: deleteCourse
+      tags: [courses]
+      summary: Delete course (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /courses/{id}/progress:
+    get:
+      operationId: getCourseProgress
+      tags: [courses]
+      summary: Get student progress for a course
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Course progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseProgress"
+
+  /courses/{id}/enroll:
+    post:
+      operationId: enrollCourse
+      tags: [courses]
+      summary: Enroll current student in a course
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Enrolled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enrollment"
+
+  # ─── MODULES ───────────────────────────────────────────────────────────────
+
+  /courses/{courseId}/modules:
+    get:
+      operationId: listModules
+      tags: [modules]
+      summary: List modules for a course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Modules with lessons
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModuleWithLessons"
+    post:
+      operationId: createModule
+      tags: [modules]
+      summary: Create module (admin)
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModuleInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Module"
+
+  /modules/{id}:
+    put:
+      operationId: updateModule
+      tags: [modules]
+      summary: Update module (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModuleUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Module"
+    delete:
+      operationId: deleteModule
+      tags: [modules]
+      summary: Delete module (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── LESSONS ───────────────────────────────────────────────────────────────
+
+  /modules/{moduleId}/lessons:
+    post:
+      operationId: createLesson
+      tags: [lessons]
+      summary: Create lesson (admin)
+      parameters:
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LessonInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lesson"
+
+  /lessons/{id}:
+    put:
+      operationId: updateLesson
+      tags: [lessons]
+      summary: Update lesson (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LessonUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lesson"
+    delete:
+      operationId: deleteLesson
+      tags: [lessons]
+      summary: Delete lesson (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /lessons/{id}/complete:
+    post:
+      operationId: completeLesson
+      tags: [lessons]
+      summary: Mark lesson complete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LessonProgressInput"
+      responses:
+        "200":
+          description: Progress updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LessonProgress"
+
+  /lessons/{id}/notes:
+    get:
+      operationId: listVideoNotes
+      tags: [lessons]
+      summary: Get video notes for a lesson
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VideoNote"
+    post:
+      operationId: createVideoNote
+      tags: [lessons]
+      summary: Add a video note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VideoNoteInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoNote"
+
+  /video-notes/{id}:
+    delete:
+      operationId: deleteVideoNote
+      tags: [lessons]
+      summary: Delete a video note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── QUIZZES ───────────────────────────────────────────────────────────────
+
+  /lessons/{id}/quiz:
+    post:
+      operationId: createQuiz
+      tags: [quizzes]
+      summary: Create quiz for a lesson (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuizInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quiz"
+
+  /quizzes/{id}:
+    get:
+      operationId: getQuiz
+      tags: [quizzes]
+      summary: Get quiz (without correct answers for students)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Quiz
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quiz"
+    put:
+      operationId: updateQuiz
+      tags: [quizzes]
+      summary: Update quiz (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuizUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quiz"
+
+  /quizzes/{id}/questions:
+    post:
+      operationId: createQuestion
+      tags: [quizzes]
+      summary: Add question to quiz (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuestionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+
+  /questions/{id}:
+    put:
+      operationId: updateQuestion
+      tags: [quizzes]
+      summary: Update question (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuestionUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+    delete:
+      operationId: deleteQuestion
+      tags: [quizzes]
+      summary: Delete question (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /quizzes/{id}/submit:
+    post:
+      operationId: submitQuiz
+      tags: [quizzes]
+      summary: Submit quiz answers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuizSubmission"
+      responses:
+        "200":
+          description: Quiz result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuizResult"
+
+  /quizzes/{id}/attempts:
+    get:
+      operationId: getQuizAttempts
+      tags: [quizzes]
+      summary: Get quiz attempts for current user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Attempts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuizAttempt"
+
+  # ─── BADGES ────────────────────────────────────────────────────────────────
+
+  /badges:
+    get:
+      operationId: listBadges
+      tags: [badges]
+      summary: List all badges
+      responses:
+        "200":
+          description: Badges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Badge"
+    post:
+      operationId: createBadge
+      tags: [badges]
+      summary: Create badge (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BadgeInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Badge"
+
+  /badges/{id}:
+    put:
+      operationId: updateBadge
+      tags: [badges]
+      summary: Update badge (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BadgeUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Badge"
+    delete:
+      operationId: deleteBadge
+      tags: [badges]
+      summary: Delete badge (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /users/me/badges:
+    get:
+      operationId: getMyBadges
+      tags: [badges]
+      summary: Get current user's earned badges
+      responses:
+        "200":
+          description: Earned badges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserBadge"
+
+  # ─── CERTIFICATES ──────────────────────────────────────────────────────────
+
+  /users/me/certificates:
+    get:
+      operationId: getMyCertificates
+      tags: [certificates]
+      summary: Get current user's certificates
+      responses:
+        "200":
+          description: Certificates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Certificate"
+
+  /certificates/generate:
+    post:
+      operationId: generateCertificate
+      tags: [certificates]
+      summary: Generate certificate (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertificateInput"
+      responses:
+        "201":
+          description: Certificate generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certificate"
+
+  /certificates/{hash}/verify:
+    get:
+      operationId: verifyCertificate
+      tags: [certificates]
+      summary: Verify certificate by hash (public)
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Certificate verification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateVerification"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── NOTIFICATIONS ─────────────────────────────────────────────────────────
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: Get notifications for current user
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/read-all:
+    put:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "204":
+          description: Done
+
+  /notifications/{id}/read:
+    put:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Done
+
+  # ─── ANALYTICS ─────────────────────────────────────────────────────────────
+
+  /analytics/me:
+    get:
+      operationId: getMyAnalytics
+      tags: [analytics]
+      summary: Get current user's learning analytics
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentAnalytics"
+
+  /analytics/me/study-time:
+    get:
+      operationId: getMyStudyTime
+      tags: [analytics]
+      summary: Get study time chart data (last 30 days)
+      responses:
+        "200":
+          description: Daily study time
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyStudyTime"
+
+  /analytics/me/quiz-scores:
+    get:
+      operationId: getMyQuizScores
+      tags: [analytics]
+      summary: Get quiz score trend
+      responses:
+        "200":
+          description: Quiz score trend
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuizScoreTrend"
+
+  # ─── ADMIN ─────────────────────────────────────────────────────────────────
+
+  /admin/users:
+    get:
+      operationId: adminListUsers
+      tags: [admin]
+      summary: List all students (admin)
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+    post:
+      operationId: adminCreateUser
+      tags: [admin]
+      summary: Create student account (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{id}/suspend:
+    put:
+      operationId: adminSuspendUser
+      tags: [admin]
+      summary: Toggle user suspend/active (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuspendInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{id}/enroll:
+    put:
+      operationId: adminEnrollUser
+      tags: [admin]
+      summary: Enroll student in course (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminEnrollInput"
+      responses:
+        "200":
+          description: Enrolled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enrollment"
+
+  /admin/users/{id}/progress:
+    get:
+      operationId: adminGetUserProgress
+      tags: [admin]
+      summary: View student progress (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserProgress"
+
+  /admin/analytics:
+    get:
+      operationId: adminGetAnalytics
+      tags: [admin]
+      summary: Platform-wide analytics (admin)
+      responses:
+        "200":
+          description: Analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAnalytics"
+
+  /admin/analytics/courses:
+    get:
+      operationId: adminGetCourseAnalytics
+      tags: [admin]
+      summary: Per-course enrollment analytics (admin)
+      responses:
+        "200":
+          description: Course analytics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CourseAnalytics"
+
+  /admin/audit-log:
+    get:
+      operationId: adminGetAuditLog
+      tags: [admin]
+      summary: Audit log (admin)
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: integer
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit log
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+
+  /admin/settings:
+    get:
+      operationId: adminGetSettings
+      tags: [admin]
+      summary: Get platform settings (admin)
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformSettings"
+    put:
+      operationId: adminUpdateSettings
+      tags: [admin]
+      summary: Update platform settings (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformSettingsUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformSettings"
+
+  /admin/recent-activity:
+    get:
+      operationId: adminGetRecentActivity
+      tags: [admin]
+      summary: Recent activity feed (admin)
+      responses:
+        "200":
+          description: Activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  # ─── USER PREFERENCES ──────────────────────────────────────────────────────
+
+  /users/me/preferences:
+    get:
+      operationId: getMyPreferences
+      tags: [auth]
+      summary: Get current user preferences
+      responses:
+        "200":
+          description: Preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferences"
+    put:
+      operationId: updateMyPreferences
+      tags: [auth]
+      summary: Update current user preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserPreferencesUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferences"
+
+  /users/me/avatar-color:
+    put:
+      operationId: updateAvatarColor
+      tags: [auth]
+      summary: Update avatar color
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvatarColorInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  # ─── DASHBOARD ─────────────────────────────────────────────────────────────
+
+  /dashboard/student:
+    get:
+      operationId: getStudentDashboard
+      tags: [analytics]
+      summary: Student dashboard summary
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentDashboard"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +1236,981 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    # ─── AUTH SCHEMAS ─────────────────────────────────────────────────────────
+
+    LoginInput:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    LoginResult:
+      type: object
+      required: [step]
+      properties:
+        step:
+          type: string
+          enum: [done, totp_required]
+        accessToken:
+          type: ["string", "null"]
+        user:
+          $ref: "#/components/schemas/UserProfile"
+        tempToken:
+          type: ["string", "null"]
+
+    AuthSuccess:
+      type: object
+      required: [accessToken, user]
+      properties:
+        accessToken:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
+
+    RefreshResponse:
+      type: object
+      required: [accessToken]
+      properties:
+        accessToken:
+          type: string
+
+    TotpVerifyInput:
+      type: object
+      required: [tempToken, totpCode]
+      properties:
+        tempToken:
+          type: string
+        totpCode:
+          type: string
+
+    TotpSetupResponse:
+      type: object
+      required: [qrCodeDataUrl, secret]
+      properties:
+        qrCodeDataUrl:
+          type: string
+        secret:
+          type: string
+
+    ChangePasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+
+    UserProfile:
+      type: object
+      required: [id, username, role, avatarColor, createdAt]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [ADMIN, STUDENT]
+        avatarColor:
+          type: string
+        totpEnabled:
+          type: boolean
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+        lastLogin:
+          type: ["string", "null"]
+
+    UserPreferences:
+      type: object
+      required: [theme, fontSize, language]
+      properties:
+        theme:
+          type: string
+        fontSize:
+          type: string
+        language:
+          type: string
+
+    UserPreferencesUpdate:
+      type: object
+      properties:
+        theme:
+          type: string
+        fontSize:
+          type: string
+        language:
+          type: string
+
+    AvatarColorInput:
+      type: object
+      required: [color]
+      properties:
+        color:
+          type: string
+
+    # ─── COURSE SCHEMAS ───────────────────────────────────────────────────────
+
+    Course:
+      type: object
+      required: [id, title, difficulty, isPublished, createdAt]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        thumbnailUrl:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        difficulty:
+          type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+        isPublished:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: ["string", "null"]
+        enrolledCount:
+          type: integer
+        totalLessons:
+          type: integer
+        totalDurationSeconds:
+          type: integer
+        progressPercent:
+          type: ["number", "null"]
+
+    CourseInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        thumbnailUrl:
+          type: string
+        category:
+          type: string
+        difficulty:
+          type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+        isPublished:
+          type: boolean
+
+    CourseUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        thumbnailUrl:
+          type: string
+        category:
+          type: string
+        difficulty:
+          type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+        isPublished:
+          type: boolean
+
+    CourseDetail:
+      type: object
+      required: [id, title, difficulty, isPublished, modules]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        thumbnailUrl:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        difficulty:
+          type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+        isPublished:
+          type: boolean
+        createdAt:
+          type: string
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModuleWithLessons"
+
+    CourseProgress:
+      type: object
+      required: [courseId, percent, completedLessons, totalLessons]
+      properties:
+        courseId:
+          type: integer
+        percent:
+          type: number
+        completedLessons:
+          type: integer
+        totalLessons:
+          type: integer
+        lessonProgress:
+          type: array
+          items:
+            $ref: "#/components/schemas/LessonProgress"
+
+    Enrollment:
+      type: object
+      required: [id, userId, courseId, enrolledAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        courseId:
+          type: integer
+        enrolledAt:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+
+    # ─── MODULE SCHEMAS ───────────────────────────────────────────────────────
+
+    Module:
+      type: object
+      required: [id, courseId, title, orderIndex]
+      properties:
+        id:
+          type: integer
+        courseId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        orderIndex:
+          type: integer
+
+    ModuleWithLessons:
+      type: object
+      required: [id, courseId, title, orderIndex, lessons]
+      properties:
+        id:
+          type: integer
+        courseId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        orderIndex:
+          type: integer
+        lessons:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lesson"
+
+    ModuleInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        orderIndex:
+          type: integer
+
+    ModuleUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        orderIndex:
+          type: integer
+
+    # ─── LESSON SCHEMAS ───────────────────────────────────────────────────────
+
+    Lesson:
+      type: object
+      required: [id, moduleId, title, type, orderIndex]
+      properties:
+        id:
+          type: integer
+        moduleId:
+          type: integer
+        title:
+          type: string
+        type:
+          type: string
+          enum: [VIDEO, PDF, QUIZ]
+        contentUrl:
+          type: ["string", "null"]
+        durationSeconds:
+          type: integer
+        orderIndex:
+          type: integer
+
+    LessonInput:
+      type: object
+      required: [title, type]
+      properties:
+        title:
+          type: string
+        type:
+          type: string
+          enum: [VIDEO, PDF, QUIZ]
+        contentUrl:
+          type: string
+        durationSeconds:
+          type: integer
+        orderIndex:
+          type: integer
+
+    LessonUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        contentUrl:
+          type: string
+        durationSeconds:
+          type: integer
+        orderIndex:
+          type: integer
+
+    LessonProgress:
+      type: object
+      required: [lessonId, completed]
+      properties:
+        lessonId:
+          type: integer
+        watchedSeconds:
+          type: integer
+        completed:
+          type: boolean
+        lastAccessed:
+          type: ["string", "null"]
+
+    LessonProgressInput:
+      type: object
+      required: [completed]
+      properties:
+        watchedSeconds:
+          type: integer
+        completed:
+          type: boolean
+
+    VideoNote:
+      type: object
+      required: [id, lessonId, timestampSec, noteText, createdAt]
+      properties:
+        id:
+          type: integer
+        lessonId:
+          type: integer
+        timestampSec:
+          type: integer
+        noteText:
+          type: string
+        createdAt:
+          type: string
+
+    VideoNoteInput:
+      type: object
+      required: [timestampSec, noteText]
+      properties:
+        timestampSec:
+          type: integer
+        noteText:
+          type: string
+
+    # ─── QUIZ SCHEMAS ─────────────────────────────────────────────────────────
+
+    Quiz:
+      type: object
+      required: [id, lessonId, title, passPercent, maxAttempts]
+      properties:
+        id:
+          type: integer
+        lessonId:
+          type: integer
+        title:
+          type: string
+        instructions:
+          type: ["string", "null"]
+        passPercent:
+          type: integer
+        maxAttempts:
+          type: integer
+        timeLimitSec:
+          type: integer
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Question"
+
+    QuizInput:
+      type: object
+      required: [title, passPercent]
+      properties:
+        title:
+          type: string
+        instructions:
+          type: string
+        passPercent:
+          type: integer
+        maxAttempts:
+          type: integer
+        timeLimitSec:
+          type: integer
+
+    QuizUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        instructions:
+          type: string
+        passPercent:
+          type: integer
+        maxAttempts:
+          type: integer
+        timeLimitSec:
+          type: integer
+
+    Question:
+      type: object
+      required: [id, quizId, questionText, type, points, orderIndex]
+      properties:
+        id:
+          type: integer
+        quizId:
+          type: integer
+        questionText:
+          type: string
+        type:
+          type: string
+          enum: [MCQ, MULTI, TRUEFALSE]
+        explanation:
+          type: ["string", "null"]
+        orderIndex:
+          type: integer
+        points:
+          type: integer
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionOption"
+
+    QuestionInput:
+      type: object
+      required: [questionText, type]
+      properties:
+        questionText:
+          type: string
+        type:
+          type: string
+          enum: [MCQ, MULTI, TRUEFALSE]
+        explanation:
+          type: string
+        orderIndex:
+          type: integer
+        points:
+          type: integer
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/OptionInput"
+
+    QuestionUpdate:
+      type: object
+      properties:
+        questionText:
+          type: string
+        explanation:
+          type: string
+        orderIndex:
+          type: integer
+        points:
+          type: integer
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/OptionInput"
+
+    QuestionOption:
+      type: object
+      required: [id, optionText]
+      properties:
+        id:
+          type: integer
+        optionText:
+          type: string
+        isCorrect:
+          type: boolean
+
+    OptionInput:
+      type: object
+      required: [optionText, isCorrect]
+      properties:
+        optionText:
+          type: string
+        isCorrect:
+          type: boolean
+
+    QuizSubmission:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuizAnswer"
+
+    QuizAnswer:
+      type: object
+      required: [questionId, selectedOptionIds]
+      properties:
+        questionId:
+          type: integer
+        selectedOptionIds:
+          type: array
+          items:
+            type: integer
+
+    QuizResult:
+      type: object
+      required: [score, maxScore, passed, attemptsUsed, attemptsAllowed]
+      properties:
+        score:
+          type: number
+        maxScore:
+          type: number
+        passed:
+          type: boolean
+        attemptsUsed:
+          type: integer
+        attemptsAllowed:
+          type: integer
+        breakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionResult"
+
+    QuestionResult:
+      type: object
+      required: [questionId, correct, points, pointsEarned]
+      properties:
+        questionId:
+          type: integer
+        correct:
+          type: boolean
+        points:
+          type: integer
+        pointsEarned:
+          type: integer
+        explanation:
+          type: ["string", "null"]
+        correctOptionIds:
+          type: array
+          items:
+            type: integer
+
+    QuizAttempt:
+      type: object
+      required: [id, quizId, score, maxScore, passed, attemptedAt]
+      properties:
+        id:
+          type: integer
+        quizId:
+          type: integer
+        score:
+          type: number
+        maxScore:
+          type: number
+        passed:
+          type: boolean
+        attemptedAt:
+          type: string
+
+    # ─── BADGE SCHEMAS ────────────────────────────────────────────────────────
+
+    Badge:
+      type: object
+      required: [id, name, criteriaType, colorHex]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+        criteriaType:
+          type: string
+        criteriaValue:
+          type: ["string", "null"]
+        colorHex:
+          type: string
+
+    BadgeInput:
+      type: object
+      required: [name, criteriaType]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        imageUrl:
+          type: string
+        criteriaType:
+          type: string
+        criteriaValue:
+          type: string
+        colorHex:
+          type: string
+
+    BadgeUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        imageUrl:
+          type: string
+        criteriaType:
+          type: string
+        criteriaValue:
+          type: string
+        colorHex:
+          type: string
+
+    UserBadge:
+      type: object
+      required: [id, badgeId, earnedAt, badge]
+      properties:
+        id:
+          type: integer
+        badgeId:
+          type: integer
+        earnedAt:
+          type: string
+        badge:
+          $ref: "#/components/schemas/Badge"
+
+    # ─── CERTIFICATE SCHEMAS ──────────────────────────────────────────────────
+
+    Certificate:
+      type: object
+      required: [id, userId, courseId, issuedAt, certHash]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        courseId:
+          type: integer
+        issuedAt:
+          type: string
+        certHash:
+          type: string
+        pdfUrl:
+          type: ["string", "null"]
+        courseName:
+          type: string
+        studentName:
+          type: string
+
+    CertificateInput:
+      type: object
+      required: [userId, courseId]
+      properties:
+        userId:
+          type: integer
+        courseId:
+          type: integer
+
+    CertificateVerification:
+      type: object
+      required: [valid, certificate]
+      properties:
+        valid:
+          type: boolean
+        certificate:
+          $ref: "#/components/schemas/Certificate"
+
+    # ─── NOTIFICATION SCHEMAS ─────────────────────────────────────────────────
+
+    Notification:
+      type: object
+      required: [id, type, title, body, isRead, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        isRead:
+          type: boolean
+        actionRoute:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    # ─── ANALYTICS SCHEMAS ────────────────────────────────────────────────────
+
+    StudentAnalytics:
+      type: object
+      required: [totalStudyHours, avgQuizScore, completionRate, streak]
+      properties:
+        totalStudyHours:
+          type: number
+        avgQuizScore:
+          type: number
+        completionRate:
+          type: number
+        streak:
+          type: integer
+        totalCoursesEnrolled:
+          type: integer
+        completedCourses:
+          type: integer
+        badgesEarned:
+          type: integer
+        certificatesEarned:
+          type: integer
+
+    DailyStudyTime:
+      type: object
+      required: [date, minutes]
+      properties:
+        date:
+          type: string
+        minutes:
+          type: number
+
+    QuizScoreTrend:
+      type: object
+      required: [date, score]
+      properties:
+        date:
+          type: string
+        score:
+          type: number
+        quizTitle:
+          type: string
+
+    StudentDashboard:
+      type: object
+      required: [stats, recentCourses, recentBadges]
+      properties:
+        stats:
+          $ref: "#/components/schemas/StudentAnalytics"
+        recentCourses:
+          type: array
+          items:
+            $ref: "#/components/schemas/Course"
+        recentBadges:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserBadge"
+        streak:
+          type: integer
+        unreadNotifications:
+          type: integer
+
+    # ─── ADMIN SCHEMAS ────────────────────────────────────────────────────────
+
+    AdminUser:
+      type: object
+      required: [id, username, role, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: ["string", "null"]
+        role:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+        lastLogin:
+          type: ["string", "null"]
+        enrolledCourses:
+          type: integer
+        badgesEarned:
+          type: integer
+        avatarColor:
+          type: string
+
+    AdminUserInput:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        email:
+          type: string
+
+    SuspendInput:
+      type: object
+      required: [isActive]
+      properties:
+        isActive:
+          type: boolean
+
+    AdminEnrollInput:
+      type: object
+      required: [courseId]
+      properties:
+        courseId:
+          type: integer
+
+    AdminUserProgress:
+      type: object
+      required: [userId, courses]
+      properties:
+        userId:
+          type: integer
+        courses:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseProgress"
+
+    AdminAnalytics:
+      type: object
+      required: [totalStudents, activeToday, publishedCourses, completionsThisMonth]
+      properties:
+        totalStudents:
+          type: integer
+        activeToday:
+          type: integer
+        publishedCourses:
+          type: integer
+        completionsThisMonth:
+          type: integer
+        totalEnrollments:
+          type: integer
+        totalBadgesAwarded:
+          type: integer
+        totalCertificatesIssued:
+          type: integer
+
+    CourseAnalytics:
+      type: object
+      required: [courseId, title, enrolledCount, completionCount]
+      properties:
+        courseId:
+          type: integer
+        title:
+          type: string
+        enrolledCount:
+          type: integer
+        completionCount:
+          type: integer
+
+    AuditLogEntry:
+      type: object
+      required: [id, action, timestamp]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: ["integer", "null"]
+        username:
+          type: ["string", "null"]
+        action:
+          type: string
+        detail:
+          type: ["string", "null"]
+        timestamp:
+          type: string
+
+    ActivityItem:
+      type: object
+      required: [id, username, action, timestamp]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        action:
+          type: string
+        detail:
+          type: ["string", "null"]
+        timestamp:
+          type: string
+
+    PlatformSettings:
+      type: object
+      required: [platformName, adminPanelEnabled, certSignatureName, certOrgName]
+      properties:
+        platformName:
+          type: string
+        logoUrl:
+          type: ["string", "null"]
+        adminPanelEnabled:
+          type: boolean
+        certSignatureName:
+          type: string
+        certOrgName:
+          type: string
+        maintenanceMode:
+          type: boolean
+
+    PlatformSettingsUpdate:
+      type: object
+      properties:
+        platformName:
+          type: string
+        logoUrl:
+          type: string
+        adminPanelEnabled:
+          type: boolean
+        certSignatureName:
+          type: string
+        certOrgName:
+          type: string
+        maintenanceMode:
+          type: boolean
+
+    UploadResult:
+      type: object
+      required: [url, filename]
+      properties:
+        url:
+          type: string
+        filename:
+          type: string
+        durationSeconds:
+          type: ["integer", "null"]

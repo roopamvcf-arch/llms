@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -25,7 +26,20 @@ app.use(
     },
   }),
 );
-app.use(cors());
+
+const allowedOrigins = process.env["REPLIT_DEV_DOMAIN"]
+  ? [`https://${process.env["REPLIT_DEV_DOMAIN"]}`]
+  : ["http://localhost:5173", "http://localhost:3000"];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.some(o => origin.startsWith(o))) return cb(null, true);
+    cb(null, true);
+  },
+  credentials: true,
+}));
+
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

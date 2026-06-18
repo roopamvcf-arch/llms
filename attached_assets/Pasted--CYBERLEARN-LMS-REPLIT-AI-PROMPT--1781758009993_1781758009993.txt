@@ -1,0 +1,1123 @@
+# ============================================================
+# CYBERLEARN LMS — REPLIT AI PROMPT
+# Full-Stack Web App Version
+# React + Node.js + PostgreSQL + Express
+# ============================================================
+
+## WHAT TO BUILD
+
+Build a full-stack web application called CyberLearn LMS —
+an offline-capable cybersecurity Learning Management System.
+This runs entirely in the browser as a web app.
+Backend: Node.js + Express. Database: PostgreSQL (Replit built-in).
+Frontend: React + Tailwind CSS.
+
+---
+
+## REPLIT PROJECT SETUP
+
+When Replit asks what to build, select:
+- Template: Node.js + React (Fullstack)
+- OR create two folders: /client (React) and /server (Express)
+
+Folder structure:
+```
+cyberlearn-lms/
+├── client/                  ← React frontend (Vite)
+│   ├── src/
+│   │   ├── main.jsx
+│   │   ├── App.jsx
+│   │   ├── pages/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   └── store/
+│   └── index.html
+├── server/                  ← Express backend
+│   ├── index.js
+│   ├── routes/
+│   ├── middleware/
+│   ├── db/
+│   └── utils/
+├── package.json
+└── .replit
+```
+
+---
+
+## TECH STACK
+
+| Layer         | Technology                                  |
+|---------------|---------------------------------------------|
+| Frontend      | React 18 + React Router v6                  |
+| Styling       | Tailwind CSS 3                              |
+| State         | Zustand                                     |
+| Charts        | Chart.js + react-chartjs-2                  |
+| Rich Text     | React Quill                                 |
+| Video Player  | React Player                                |
+| PDF Viewer    | React PDF Viewer (@react-pdf-viewer/core)   |
+| Backend       | Node.js + Express 4                         |
+| Database      | PostgreSQL (Replit built-in DB)             |
+| ORM           | Prisma ORM                                  |
+| Auth          | JWT (jsonwebtoken) access + refresh tokens  |
+| 2FA           | speakeasy + qrcode                          |
+| Password Hash | bcryptjs                                    |
+| File Upload   | Multer (store in /uploads folder)           |
+| PDF Generate  | PDFKit                                      |
+| Session Store | express-session + connect-pg-simple         |
+| Validation    | zod                                         |
+
+---
+
+## COLOR THEME — ORANGE + BLUE + GREEN
+
+Define these in tailwind.config.js:
+
+```javascript
+theme: {
+  extend: {
+    colors: {
+      // Backgrounds
+      base:    '#0f1117',
+      surface: '#171c27',
+      card:    '#1e2535',
+      hover:   '#252d40',
+
+      // Orange — buttons, CTAs, progress, highlights
+      primary: {
+        50:  '#fff4e6',
+        100: '#ffd8a8',
+        300: '#ff9f3f',
+        500: '#f97316',   // main orange
+        700: '#c2410c',
+        900: '#7c2d12',
+      },
+
+      // Blue — navigation, info, links
+      info: {
+        100: '#bfdbfe',
+        300: '#60a5fa',
+        500: '#3b82f6',   // main blue
+        700: '#1d4ed8',
+        900: '#1e3a5f',
+      },
+
+      // Green — success, badges, certificates, completion
+      success: {
+        100: '#bbf7d0',
+        300: '#4ade80',
+        500: '#22c55e',   // main green
+        700: '#15803d',
+        900: '#14532d',
+      },
+
+      // Text
+      'text-primary':   '#f1f5f9',
+      'text-secondary': '#94a3b8',
+      'text-muted':     '#4b5563',
+
+      // Semantic
+      danger:  '#ef4444',
+      warning: '#f59e0b',
+    },
+    fontFamily: {
+      mono: ['JetBrains Mono', 'Courier New', 'monospace'],
+      sans: ['Inter', 'system-ui', 'sans-serif'],
+    }
+  }
+}
+```
+
+Use Google Fonts import in index.html:
+```html
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+```
+
+Global styles:
+- All pages: bg-base text-text-primary min-h-screen
+- All headings: font-mono
+- All body text: font-sans
+- Cards: bg-card border border-info-900/30 rounded-xl p-5 shadow-lg
+- Primary buttons: bg-primary-500 hover:bg-primary-700 text-white px-4 py-2 rounded-lg font-mono font-semibold transition-all
+- Success state: text-success-500 or bg-success-900/30 border-success-700
+- Info/nav active: border-l-2 border-primary-500 bg-hover
+
+---
+
+## DATABASE SCHEMA (Prisma)
+
+File: server/prisma/schema.prisma
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  username      String   @unique
+  email         String?
+  passwordHash  String
+  role          Role     @default(STUDENT)
+  totpSecret    String?
+  totpEnabled   Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  failedLogins  Int      @default(0)
+  lockoutUntil  DateTime?
+  avatarColor   String   @default("#f97316")
+  createdAt     DateTime @default(now())
+  lastLogin     DateTime?
+
+  enrollments   Enrollment[]
+  progress      Progress[]
+  quizAttempts  QuizAttempt[]
+  userBadges    UserBadge[]
+  certificates  Certificate[]
+  sessions      Session[]
+  videoNotes    VideoNote[]
+  notifications Notification[]
+  preferences   UserPreference?
+  auditLogs     AuditLog[]
+}
+
+enum Role {
+  ADMIN
+  STUDENT
+}
+
+model Course {
+  id              Int      @id @default(autoincrement())
+  title           String
+  description     String?
+  thumbnailUrl    String?
+  category        String?
+  difficulty      Difficulty @default(BEGINNER)
+  createdById     Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isPublished     Boolean  @default(false)
+
+  modules         Module[]
+  enrollments     Enrollment[]
+  certificates    Certificate[]
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+model Module {
+  id          Int      @id @default(autoincrement())
+  courseId    Int
+  title       String
+  description String?
+  orderIndex  Int      @default(0)
+
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+}
+
+model Lesson {
+  id              Int        @id @default(autoincrement())
+  moduleId        Int
+  title           String
+  type            LessonType
+  contentUrl      String?
+  durationSeconds Int        @default(0)
+  orderIndex      Int        @default(0)
+
+  module          Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progress        Progress[]
+  quiz            Quiz?
+  videoNotes      VideoNote[]
+}
+
+enum LessonType {
+  VIDEO
+  PDF
+  QUIZ
+}
+
+model Enrollment {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  courseId    Int
+  enrolledAt  DateTime  @default(now())
+  completedAt DateTime?
+
+  user        User      @relation(fields: [userId], references: [id])
+  course      Course    @relation(fields: [courseId], references: [id])
+
+  @@unique([userId, courseId])
+}
+
+model Progress {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  lessonId       Int
+  watchedSeconds Int      @default(0)
+  completed      Boolean  @default(false)
+  lastAccessed   DateTime @default(now())
+
+  user           User     @relation(fields: [userId], references: [id])
+  lesson         Lesson   @relation(fields: [lessonId], references: [id])
+
+  @@unique([userId, lessonId])
+}
+
+model Quiz {
+  id             Int      @id @default(autoincrement())
+  lessonId       Int      @unique
+  title          String
+  instructions   String?
+  passPercent    Int      @default(70)
+  maxAttempts    Int      @default(3)
+  timeLimitSec   Int      @default(0)
+
+  lesson         Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions      Question[]
+  attempts       QuizAttempt[]
+}
+
+model Question {
+  id           Int          @id @default(autoincrement())
+  quizId       Int
+  questionText String
+  type         QuestionType
+  explanation  String?
+  orderIndex   Int          @default(0)
+  points       Int          @default(1)
+
+  quiz         Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options      Option[]
+}
+
+enum QuestionType {
+  MCQ
+  MULTI
+  TRUEFALSE
+}
+
+model Option {
+  id         Int      @id @default(autoincrement())
+  questionId Int
+  optionText String
+  isCorrect  Boolean  @default(false)
+
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model QuizAttempt {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  quizId      Int
+  score       Float
+  maxScore    Float
+  passed      Boolean
+  answersJson String?
+  attemptedAt DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+  quiz        Quiz     @relation(fields: [quizId], references: [id])
+}
+
+model Badge {
+  id            Int       @id @default(autoincrement())
+  name          String
+  description   String?
+  imageUrl      String?
+  criteriaType  String
+  criteriaValue String?
+  colorHex      String    @default("#22c55e")
+
+  userBadges    UserBadge[]
+}
+
+model UserBadge {
+  id       Int      @id @default(autoincrement())
+  userId   Int
+  badgeId  Int
+  earnedAt DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  badge    Badge    @relation(fields: [badgeId], references: [id])
+
+  @@unique([userId, badgeId])
+}
+
+model Certificate {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  courseId  Int
+  issuedAt  DateTime @default(now())
+  certHash  String   @unique
+  pdfUrl    String?
+
+  user      User     @relation(fields: [userId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+
+  @@unique([userId, courseId])
+}
+
+model Session {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  refreshTokenHash String
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  user             User     @relation(fields: [userId], references: [id])
+}
+
+model VideoNote {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  lessonId     Int
+  timestampSec Int
+  noteText     String
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id])
+  lesson       Lesson   @relation(fields: [lessonId], references: [id])
+}
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  type        String
+  title       String
+  body        String
+  isRead      Boolean  @default(false)
+  actionRoute String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model UserPreference {
+  id        Int    @id @default(autoincrement())
+  userId    Int    @unique
+  theme     String @default("dark")
+  fontSize  String @default("normal")
+  language  String @default("en")
+
+  user      User   @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String
+  detail    String?
+  timestamp DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model PlatformSetting {
+  key   String @id
+  value String
+}
+```
+
+---
+
+## BACKEND API ROUTES
+
+### Auth Routes — /api/auth
+
+```
+POST /api/auth/login
+  Body: { username, password }
+  → Student: returns { accessToken, refreshToken, user }
+  → Admin: returns { step: "totp_required", tempToken }
+
+POST /api/auth/verify-totp
+  Body: { tempToken, totpCode }
+  → Returns { accessToken, refreshToken, user }
+
+POST /api/auth/refresh
+  Body: { refreshToken }
+  → Returns { accessToken }
+
+POST /api/auth/logout
+  Body: { refreshToken }
+  → Invalidates refresh token
+
+POST /api/auth/setup-totp        [ADMIN only]
+  → Returns { qrCodeDataUrl, secret }
+
+GET  /api/auth/me
+  → Returns current user from access token
+```
+
+### Course Routes — /api/courses
+
+```
+GET  /api/courses                       [Student: enrolled only, Admin: all]
+GET  /api/courses/:id                   [get course with modules+lessons]
+POST /api/courses                       [Admin only]
+PUT  /api/courses/:id                   [Admin only]
+DELETE /api/courses/:id                 [Admin only]
+
+GET  /api/courses/:id/modules           [get all modules]
+POST /api/courses/:id/modules           [Admin only]
+PUT  /api/modules/:id                   [Admin only]
+DELETE /api/modules/:id                 [Admin only]
+
+POST /api/modules/:id/lessons           [Admin only]
+PUT  /api/lessons/:id                   [Admin only]
+DELETE /api/lessons/:id                 [Admin only]
+
+POST /api/lessons/:id/complete          [Student: mark lesson complete]
+GET  /api/courses/:id/progress          [Student: get progress for course]
+```
+
+### Quiz Routes — /api/quizzes
+
+```
+POST /api/lessons/:id/quiz              [Admin: create quiz for lesson]
+PUT  /api/quizzes/:id                   [Admin: update quiz]
+POST /api/quizzes/:id/questions         [Admin: add question]
+PUT  /api/questions/:id                 [Admin: update question]
+DELETE /api/questions/:id               [Admin]
+
+GET  /api/quizzes/:id                   [Student: get quiz (no correct answers)]
+POST /api/quizzes/:id/submit            [Student: submit answers]
+GET  /api/quizzes/:id/attempts          [Student: own attempts]
+```
+
+### Upload Routes — /api/upload
+
+```
+POST /api/upload/video                  [Admin: upload MP4 via multer]
+POST /api/upload/pdf                    [Admin: upload PDF via multer]
+POST /api/upload/thumbnail              [Admin: upload course thumbnail]
+POST /api/upload/badge                  [Admin: upload badge PNG]
+```
+
+### Admin Routes — /api/admin
+
+```
+GET  /api/admin/users                   [list all students]
+POST /api/admin/users                   [create student account]
+PUT  /api/admin/users/:id/suspend       [suspend/activate]
+PUT  /api/admin/users/:id/enroll        [enroll in course]
+GET  /api/admin/users/:id/progress      [view student progress]
+GET  /api/admin/analytics               [platform-wide stats]
+GET  /api/admin/analytics/course/:id    [per-course analytics]
+GET  /api/admin/audit-log               [audit log viewer]
+GET  /api/admin/settings                [get platform settings]
+PUT  /api/admin/settings                [update platform settings]
+```
+
+### Badge & Certificate Routes
+
+```
+GET  /api/badges                        [list all badges]
+POST /api/badges                        [Admin: create badge]
+GET  /api/users/me/badges               [student own badges]
+
+POST /api/certificates/generate         [Admin: manual generate]
+GET  /api/users/me/certificates         [student own certificates]
+GET  /api/certificates/:hash/verify     [public verify by hash]
+GET  /api/certificates/:id/download     [download PDF]
+```
+
+### Notification Routes
+
+```
+GET  /api/notifications                 [get unread for current user]
+PUT  /api/notifications/read-all        [mark all read]
+PUT  /api/notifications/:id/read        [mark one read]
+```
+
+---
+
+## BACKEND MIDDLEWARE
+
+### authMiddleware.js
+```javascript
+// Verify JWT access token on every protected route
+// Attach req.user = { id, username, role }
+// Return 401 if token missing/expired
+// Return 403 if role check fails
+
+export function requireAuth(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  try {
+    req.user = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+export function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'ADMIN')
+    return res.status(403).json({ error: 'Admin only' });
+  next();
+}
+```
+
+### rateLimitMiddleware.js
+```javascript
+// Track failed logins per username in DB
+// After 5 failures → lockout 15 minutes
+// Check lockoutUntil before every login attempt
+// Reset on successful login
+```
+
+### auditMiddleware.js
+```javascript
+// Log every API call: userId, method, path, timestamp
+// Write to audit_log table
+// Admin can view via GET /api/admin/audit-log
+```
+
+---
+
+## FRONTEND PAGES — ALL SCREENS TO BUILD
+
+### AUTH SCREENS
+
+**Login Page** `/login`
+- Dark bg-base background
+- Centered card: bg-card, rounded-2xl, shadow-2xl, p-8, max-w-md
+- Logo + "CyberLearn LMS" title in font-mono text-primary-500
+- Username input, Password input (show/hide toggle)
+- Login button: full-width, bg-primary-500
+- Error states: red border + message
+- Loading state: spinner on button
+- After login:
+  - role=ADMIN → /admin/dashboard (or /admin/totp if TOTP required)
+  - role=STUDENT → /student/dashboard
+
+**Admin TOTP Page** `/admin/totp`
+- 6-digit OTP input (auto-focus, auto-submit on 6 chars)
+- "Open your authenticator app" instruction
+- Back to login link
+
+---
+
+### STUDENT SCREENS
+
+**Student Dashboard** `/student/dashboard`
+
+Layout: Left sidebar (64px wide, icon-only) + main content area
+
+Left Sidebar:
+- Platform logo/icon at top (orange circle with "CL")
+- Nav icons (with tooltip on hover):
+  - 🏠 Dashboard (active = orange left border)
+  - 📚 My Courses
+  - 🏆 Leaderboard
+  - 🎖️ Badges
+  - 🎓 Certificates
+  - 📊 Analytics
+  - 🔔 Notifications
+  - ⚙️ Settings
+- Logout icon at bottom
+
+Main Content:
+- Top bar: "Welcome back, [username]" + notification bell (orange dot if unread)
+- Stats row (4 cards, orange/blue/green accents):
+  - Courses Enrolled (blue)
+  - Completed (green)
+  - Badges Earned (orange)
+  - Study Hours (blue)
+- "Continue Learning" section:
+  - 2-3 course cards showing where student left off
+  - Each card: thumbnail, title, progress bar (orange), "Continue" button
+- "My Progress" section:
+  - Circular progress rings per enrolled course (SVG, orange stroke)
+- "Recent Badges" shelf:
+  - Hexagonal badge icons (green glow border on earned)
+- "Study Streak" card:
+  - Number of consecutive days (flame icon, orange)
+  - Mini activity calendar (7 days)
+
+---
+
+**Course Browser** `/student/courses`
+- Search bar at top
+- Filter pills: All | Beginner | Intermediate | Advanced
+- Course grid (3 columns desktop, 1 mobile):
+  - Each card: thumbnail image, category tag (blue pill), difficulty badge,
+    title (font-mono), description snippet, progress bar, "Continue" or "Start" button
+  - Completed courses: green checkmark overlay on thumbnail
+
+---
+
+**Course Player** `/student/courses/:id/learn`
+
+Three-column layout:
+- LEFT (280px): Course outline sidebar
+  - Course title at top
+  - Module sections (collapsible)
+  - Each lesson row: type icon + title + duration
+  - Completed: green check. Current: orange highlight + left border
+  - Overall progress % at bottom
+
+- CENTER (flex-1): Main content area
+  - VIDEO lesson:
+    - React Player for video (dark controls)
+    - WATERMARK OVERLAY: absolute positioned div over video
+      ```jsx
+      // Moves to random position every 8 seconds
+      // Shows: username + date/time
+      // Orange color, 25% opacity, -28deg rotation, monospace font
+      // Smooth CSS transition on position change
+      // pointerEvents: none so it doesn't block controls
+      ```
+    - Below player: lesson title, description
+    - "Mark Complete" button (appears after 90% watched)
+    - Bookmarks bar: add bookmark at current time, list of bookmarks
+
+  - PDF lesson:
+    - React PDF Viewer (full height)
+    - No download button (hide default toolbar download)
+    - "Mark Complete" button at bottom
+
+  - QUIZ lesson:
+    - See quiz engine below
+
+- RIGHT (320px, collapsible): Notes panel
+  - "Notes" tab + "AI Tutor" tab (placeholder for future)
+  - Notes tab: list of timestamped notes, "Add note" button
+  - Each note: [MM:SS] note text, delete button
+
+---
+
+**Quiz Engine** (component inside Course Player)
+- Quiz title + instructions
+- Timer countdown (if time limit set) — orange, turns red at <30 seconds
+- Question card (one at a time):
+  - Question number: "Question 3 of 10"
+  - Question text (large, font-sans)
+  - MCQ: radio button options (styled as clickable cards)
+  - Multi-select: checkbox options (styled as clickable cards)
+  - True/False: two big buttons (True=green, False=red)
+- Progress bar: questions answered / total
+- Previous + Next navigation
+- Submit button (disabled until all answered)
+- Results screen after submit:
+  - Score: big number, orange if passed (≥pass%), red if failed
+  - Pass/Fail banner (green/red)
+  - Attempts remaining
+  - Per-question breakdown: correct (green) / incorrect (red) + explanation
+  - "Retry" button or "Continue" button
+
+---
+
+**Badges Page** `/student/badges`
+- All badges grid
+- Earned: full color, glowing green border, earned date
+- Locked: grey, blurred, lock icon, criteria shown on hover
+- Each badge: hexagonal clip-path, badge image or icon, name below
+
+---
+
+**Certificates Page** `/student/certificates`
+- List of earned certificates
+- Each row: course name, issue date, certificate ID (truncated hash)
+- Green "CERTIFIED" badge pill
+- Download PDF button (orange)
+- View button → opens certificate preview modal
+
+**Certificate Preview Modal**:
+- White background card on dark overlay
+- Orange header band: "CERTIFICATE OF COMPLETION"
+- Platform logo
+- "This is to certify that" → Student Name (large, font-mono)
+- "has successfully completed" → Course Title
+- Date issued
+- Unique cert hash + QR code placeholder
+- Green "VERIFIED" stamp in corner
+
+---
+
+**Analytics Page** `/student/analytics`
+- Study time bar chart (Chart.js, last 30 days, orange bars, dark bg)
+- Quiz score trend line chart (blue line)
+- Stat cards: total study hours, avg quiz score, completion rate, streak
+- Weak areas section: horizontal bar chart (red bars) for topics < 70%
+- Strong areas: horizontal bar chart (green bars) for topics > 85%
+
+---
+
+**Profile & Settings** `/student/settings`
+- Avatar circle (initials + avatarColor, editable color picker)
+- Display name edit
+- Theme switcher: Dark | Light | High Contrast (3 cards with preview)
+- Font size: Normal | Large | Extra Large
+- Notification preferences toggles
+- Change password form
+- Save button
+
+---
+
+### ADMIN SCREENS
+
+**Admin Dashboard** `/admin/dashboard`
+
+Layout: Left sidebar (wider, 220px, with labels) + main
+
+Left Sidebar:
+- Logo + "Admin Panel" label
+- Nav items:
+  - 📊 Dashboard
+  - 📚 Courses
+  - 👥 Students
+  - 🎖️ Badges
+  - 🎓 Certificates
+  - ⚙️ Settings
+  - 📋 Audit Log
+- Sidebar has "Disable Admin Panel" button at bottom (red, with confirm dialog)
+
+Main Dashboard:
+- Stats row (4 cards):
+  - Total Students (blue, people icon)
+  - Active Today (orange, activity icon)
+  - Courses Published (green, book icon)
+  - Completions This Month (green, check icon)
+- Enrollment bar chart (Chart.js, per course, orange bars)
+- Recent Activity table: username, last login, lessons done, time spent
+- Recent Audit Log: last 10 entries table
+
+---
+
+**Course Builder** `/admin/courses`
+
+Course List view:
+- Table: thumbnail, title, category, students enrolled, published toggle, Edit/Delete buttons
+- "Create New Course" button (orange)
+
+Course Edit view `/admin/courses/:id/edit`:
+- Two-panel layout:
+  - LEFT: Course tree
+    - Course title (editable)
+    - Modules list (drag to reorder via drag handle)
+    - Each module: expand to show lessons (drag to reorder)
+    - "+ Add Module" button
+    - Each lesson row: type icon, title, drag handle, Edit/Delete
+    - "+ Add Lesson" button under each module
+  - RIGHT: Editor panel
+    - When course selected: title, description (Quill editor), category,
+      difficulty dropdown, thumbnail upload, publish toggle
+    - When module selected: module title
+    - When VIDEO lesson selected:
+      - Title input
+      - Video upload button (Multer, accept mp4/mkv/webm)
+      - Uploaded file name shown + duration auto-detected
+    - When PDF lesson selected:
+      - Title input
+      - PDF upload button
+    - When QUIZ lesson selected:
+      - Title + instructions
+      - Pass % slider, max attempts, time limit
+      - Questions list with "+ Add Question" button
+      - Each question: type select, question text, options,
+        mark correct, add explanation, delete
+
+---
+
+**Student Manager** `/admin/students`
+- Search + filter bar
+- Table: avatar, username, enrolled courses, badges, last active, status, Actions
+- Actions: View Progress | Enroll in Course | Suspend | Reset Password
+- "Create Student Account" button → modal form: username + password
+- Click student row → student detail modal:
+  - Progress per course (progress bars)
+  - Badges earned
+  - Quiz attempt history
+  - Certificates issued
+  - "Issue Certificate Manually" button
+
+---
+
+**Badge Manager** `/admin/badges`
+- Badge grid showing all badges
+- "Create Badge" button → slide-over form:
+  - Name, description
+  - Image upload (PNG)
+  - Criteria type dropdown:
+    - complete_course → select course dropdown
+    - pass_quiz → select quiz + min score
+    - watch_all_videos → select course
+    - first_login → no config
+    - perfect_score → select quiz
+  - Color picker (for badge glow color)
+  - Save button (green)
+- Edit / Delete on each badge card
+
+---
+
+**Certificate Manager** `/admin/certificates`
+- Template settings:
+  - Organization name input
+  - Signatory name input
+  - Logo upload
+  - Accent color picker (default orange)
+  - Preview button → shows certificate preview
+- Issued certificates table:
+  - Student, course, date issued, cert hash, Download, Revoke
+- "Issue Certificate Manually" button:
+  - Select student dropdown
+  - Select completed course dropdown
+  - Issue button → generates PDF, stores in DB
+
+---
+
+**Platform Settings** `/admin/settings`
+- Platform name input
+- Logo upload
+- Language selector: English | Arabic | French | Hindi
+- Admin panel disable toggle:
+  - Big red toggle switch
+  - Confirmation dialog: "This will lock all admin functions.
+    Are you sure?" with checkbox "I understand"
+  - If disabled: shows re-enable button (only visible via direct DB)
+- Maintenance mode toggle
+
+---
+
+**Audit Log** `/admin/audit-log`
+- Filter: by date range, by user, by action type
+- Table: timestamp, user, action, detail
+- Export as CSV button
+
+---
+
+## SECURITY IMPLEMENTATION (Web version)
+
+### Rate Limiting
+```javascript
+// server/middleware/rateLimit.js
+// Use express-rate-limit for API endpoints
+import rateLimit from 'express-rate-limit';
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many login attempts. Try again in 15 minutes.' }
+});
+app.use('/api/auth/login', loginLimiter);
+```
+
+### JWT Token Strategy
+```javascript
+// Access token: 15 minutes
+// Refresh token: 7 days, stored hashed in Session table
+// Refresh endpoint: verify refresh → issue new access + rotate refresh
+// On logout: delete session row
+
+const ACCESS_SECRET  = process.env.ACCESS_TOKEN_SECRET;   // set in Replit Secrets
+const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET;  // set in Replit Secrets
+```
+
+### Input Validation (Zod)
+```javascript
+// Validate every API request body with Zod schemas
+// Return 400 with field errors on validation failure
+// Prevent SQL injection via Prisma parameterized queries
+```
+
+### TOTP for Admin
+```javascript
+// speakeasy.generateSecret() on admin account creation
+// Store in User.totpSecret (encrypted via AES in production)
+// Two-step login: password first → if admin → require TOTP
+// speakeasy.totp.verify() with window: 1
+```
+
+### Watermark on Video
+```jsx
+// VideoWatermark.jsx — positioned absolute over React Player
+function VideoWatermark({ username }) {
+  const [pos, setPos] = useState({ x: 15, y: 20 });
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setPos({
+        x: 5 + Math.random() * 65,
+        y: 5 + Math.random() * 75,
+      });
+    }, 8000);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: `${pos.x}%`,
+        top: `${pos.y}%`,
+        transform: 'rotate(-28deg)',
+        opacity: 0.28,
+        color: '#f97316',
+        fontSize: '13px',
+        fontFamily: "'JetBrains Mono', monospace",
+        pointerEvents: 'none',
+        userSelect: 'none',
+        transition: 'left 3.5s ease-in-out, top 3.5s ease-in-out',
+        zIndex: 50,
+        whiteSpace: 'nowrap',
+        textShadow: '0 0 4px rgba(0,0,0,0.9)',
+        lineHeight: 1.5,
+      }}
+    >
+      {username}
+      <br />
+      {new Date().toLocaleString('en-GB')}
+    </div>
+  );
+}
+```
+
+### Auto-Certificate Generation
+```javascript
+// server/utils/certificates.js
+// Triggered after lesson marked complete
+// Check: all lessons in course completed by student?
+// Check: all quizzes in course passed by student?
+// If yes: generateCertificate(userId, courseId)
+//   → Create cert hash: SHA-256 of userId+courseId+timestamp
+//   → Generate PDF with pdfkit
+//   → Save to /uploads/certificates/
+//   → Insert into Certificate table
+//   → Create notification: "Your certificate is ready!"
+//   → Check + award any course-completion badges
+```
+
+### Auto-Badge Award
+```javascript
+// server/utils/badges.js
+// Called after: lesson complete, quiz passed, first login
+// Checks all badge criteria for this user
+// Awards any newly met criteria (insert UserBadge, skip if already earned)
+// Creates notification for each new badge
+```
+
+---
+
+## ENVIRONMENT VARIABLES (set in Replit Secrets)
+
+```
+DATABASE_URL=postgresql://...     (Replit provides this)
+ACCESS_TOKEN_SECRET=<random 64 char hex>
+REFRESH_TOKEN_SECRET=<random 64 char hex>
+JWT_EXPIRES_IN=15m
+REFRESH_EXPIRES_IN=7d
+PORT=3001
+CLIENT_URL=https://your-repl-url.replit.dev
+```
+
+---
+
+## BUILD ORDER FOR REPLIT AI
+
+Tell Replit AI to build in this exact order:
+
+**Step 1 — Project Setup**
+"Set up a fullstack Node.js + React project with:
+- /server: Express + Prisma + PostgreSQL
+- /client: React + Vite + Tailwind CSS
+- Install all packages listed in the tech stack
+- Set up Prisma with the full schema I will provide
+- Run migrations"
+
+**Step 2 — Auth System**
+"Build the complete auth system:
+- POST /api/auth/login with rate limiting and account lockout
+- JWT access + refresh tokens
+- Admin TOTP two-step login with speakeasy
+- Auth middleware for protected routes
+- Login page in React with the orange/blue/green dark theme"
+
+**Step 3 — Admin Course Builder**
+"Build the admin course builder:
+- All course/module/lesson CRUD API routes
+- Video and PDF file upload with Multer
+- Admin course builder UI with drag-and-drop module/lesson reordering
+- Video upload, PDF upload, quiz builder UI"
+
+**Step 4 — Student Course Player**
+"Build the student course player:
+- Course browser page showing enrolled courses
+- Course player with video (React Player + moving watermark overlay)
+- PDF viewer (React PDF Viewer, no download button)
+- Progress auto-save every 10 seconds via API
+- Mark complete button"
+
+**Step 5 — Quiz Engine**
+"Build the complete quiz engine:
+- Quiz API: get quiz (no answers), submit answers, score calculation
+- Quiz UI: timer, one question at a time, MCQ/Multi/TrueFalse styles
+- Results screen with per-question feedback
+- Attempt history"
+
+**Step 6 — Badges + Certificates**
+"Build badges and certificates:
+- Badge auto-award system (check criteria after every progress save)
+- Certificate auto-generation with pdfkit when course completed
+- Badges page with hexagonal styled cards
+- Certificates page with download PDF button
+- Certificate preview modal"
+
+**Step 7 — Admin Management**
+"Build admin management screens:
+- Student manager (create, suspend, enroll, view progress)
+- Badge manager (create badges, set criteria, upload images)
+- Certificate manager (configure template, manual issue, list all)
+- Platform settings (platform name, logo, admin panel disable toggle)
+- Audit log viewer"
+
+**Step 8 — Dashboard + Analytics**
+"Build dashboards:
+- Admin dashboard with stats cards, enrollment chart, recent activity
+- Student dashboard with progress rings, badges shelf, continue learning
+- Student analytics page with study time chart and quiz score trend
+- In-app notification system (bell icon, unread count, mark read)"
+
+**Step 9 — Polish**
+"Add final polish:
+- Theme switcher (dark/light/high-contrast) stored in user preferences
+- Idle auto-logout after 30 minutes of inactivity
+- Video notes and bookmarks system
+- Mobile responsive layout for all pages
+- Loading skeletons for all data-fetching states
+- Error boundary components"
+
+---
+
+## IMPORTANT NOTES FOR REPLIT AI
+
+- Use Prisma for ALL database queries — no raw SQL
+- All API responses: { data: ... } on success, { error: "message" } on failure
+- Always check req.user.role before admin operations
+- Student can ONLY see courses they are enrolled in
+- Student can NEVER access /api/admin/* routes
+- Admin sees ALL courses regardless of enrollment
+- File uploads go to /server/uploads/ folder
+- Serve /server/uploads/ as static files via Express
+- All chart components use Chart.js with dark theme config
+- Use React Router v6 with protected route components:
+  - <ProtectedRoute role="STUDENT"> wraps all student pages
+  - <ProtectedRoute role="ADMIN"> wraps all admin pages
+  - Redirect to /login if not authenticated
+- Store accessToken in memory (Zustand store), refreshToken in httpOnly cookie
+- Auto-refresh access token 1 minute before expiry using axios interceptor
+
+---
+
+*Paste this entire prompt into Replit AI. Start with Step 1 and
+tell it to proceed step by step. The complete web app will have
+all features: courses, video with watermark, PDF viewer, quizzes,
+auto-certificates, badges, admin panel, analytics, notifications.*

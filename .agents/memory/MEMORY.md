@@ -1,0 +1,1 @@
+- [CyberLearn LMS contract-first patterns](cyberlearn-patterns.md) — key gotchas for the OpenAPI→codegen→frontend cycle in this project
