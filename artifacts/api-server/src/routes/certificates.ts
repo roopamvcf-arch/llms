@@ -8,16 +8,19 @@ import { notificationsTable } from "@workspace/db/schema";
 
 const router = Router();
 
-router.get("/certificates/mine", authenticate, async (req, res) => {
+router.get(["/users/me/certificates", "/certificates/mine"], authenticate, async (req, res) => {
   const userId = req.user!.userId;
   const certs = await db.select({ id: certificatesTable.id, userId: certificatesTable.userId, courseId: certificatesTable.courseId, issuedAt: certificatesTable.issuedAt, certHash: certificatesTable.certHash, pdfUrl: certificatesTable.pdfUrl, courseName: coursesTable.title }).from(certificatesTable).innerJoin(coursesTable, eq(coursesTable.id, certificatesTable.courseId)).where(eq(certificatesTable.userId, userId));
   const result = certs.map(c => ({ ...c, studentName: "" }));
   res.json(result);
 });
 
-router.post("/certificates", authenticate, async (req, res) => {
-  const { courseId } = req.body as { courseId: number };
-  const userId = req.user!.userId;
+router.post(["/certificates", "/certificates/generate"], authenticate, async (req, res) => {
+  const { courseId, userId: bodyUserId } = req.body as { courseId: number; userId?: number };
+  let userId = req.user!.userId;
+  if (req.user!.role === "ADMIN" && bodyUserId) {
+    userId = bodyUserId;
+  }
 
   const [enrollment] = await db.select().from(enrollmentsTable).where(and(eq(enrollmentsTable.userId, userId), eq(enrollmentsTable.courseId, courseId))).limit(1);
   if (!enrollment) { res.status(400).json({ error: "Not enrolled" }); return; }
@@ -42,8 +45,9 @@ router.post("/certificates", authenticate, async (req, res) => {
   res.status(201).json({ ...cert, courseName: course.title, studentName: "" });
 });
 
-router.get("/certificates/verify/:hash", async (req, res) => {
-  const [cert] = await db.select({ id: certificatesTable.id, issuedAt: certificatesTable.issuedAt, certHash: certificatesTable.certHash, courseName: coursesTable.title, userId: certificatesTable.userId, courseId: certificatesTable.courseId }).from(certificatesTable).innerJoin(coursesTable, eq(coursesTable.id, certificatesTable.courseId)).where(eq(certificatesTable.certHash, req.params['hash']! as string)).limit(1);
+router.get(["/certificates/:hash/verify", "/certificates/verify/:hash"], async (req, res) => {
+  const hash = req.params['hash']! as string;
+  const [cert] = await db.select({ id: certificatesTable.id, issuedAt: certificatesTable.issuedAt, certHash: certificatesTable.certHash, courseName: coursesTable.title, userId: certificatesTable.userId, courseId: certificatesTable.courseId }).from(certificatesTable).innerJoin(coursesTable, eq(coursesTable.id, certificatesTable.courseId)).where(eq(certificatesTable.certHash, hash)).limit(1);
   if (!cert) { res.status(404).json({ error: "Certificate not found", valid: false }); return; }
   const [user] = await db.select({ username: usersTable.username }).from(usersTable).where(eq(usersTable.id, cert.userId)).limit(1);
   res.json({ ...cert, valid: true, studentName: user?.username ?? "" });

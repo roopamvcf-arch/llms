@@ -18,7 +18,7 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     if (settings) {
-      setPlatformName(settings.platformName ?? "CyberLearn");
+      setPlatformName(settings.platformName ?? "Vande E-Kit");
       setAdminPanelEnabled(settings.adminPanelEnabled ?? true);
       setMaintenanceMode(settings.maintenanceMode ?? false);
     }

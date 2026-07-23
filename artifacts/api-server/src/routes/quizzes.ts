@@ -6,9 +6,9 @@ import { authenticate, requireAdmin } from "../middlewares/authenticate";
 
 const router = Router();
 
-router.post("/lessons/:lessonId/quizzes", authenticate, requireAdmin, async (req, res) => {
+router.post(["/lessons/:id/quiz", "/lessons/:lessonId/quizzes"], authenticate, requireAdmin, async (req, res) => {
   const { title, instructions, passPercent, maxAttempts, timeLimitSec } = req.body;
-  const lessonId = parseInt(req.params['lessonId']! as string);
+  const lessonId = parseInt((req.params['id'] ?? req.params['lessonId'])! as string);
   const [quiz] = await db.insert(quizzesTable).values({ lessonId, title, instructions, passPercent: passPercent ?? 70, maxAttempts: maxAttempts ?? 3, timeLimitSec: timeLimitSec ?? 0 }).returning();
   res.status(201).json(quiz);
 });
@@ -45,23 +45,38 @@ router.post("/quizzes/:id/questions", authenticate, requireAdmin, async (req, re
   res.status(201).json({ ...question, options: opts });
 });
 
-router.put("/quizzes/:quizId/questions/:questionId", authenticate, requireAdmin, async (req, res) => {
-  const questionId = parseInt(req.params['questionId']! as string);
+router.put(["/questions/:id", "/quizzes/:quizId/questions/:questionId"], authenticate, requireAdmin, async (req, res) => {
+  const questionId = parseInt((req.params['id'] ?? req.params['questionId'])! as string);
   const { questionText, type, explanation, orderIndex, points } = req.body;
   const [question] = await db.update(questionsTable).set({ questionText, type, explanation, orderIndex, points }).where(eq(questionsTable.id, questionId)).returning();
   if (!question) { res.status(404).json({ error: "Not found" }); return; }
   res.json(question);
 });
 
-router.delete("/quizzes/:quizId/questions/:questionId", authenticate, requireAdmin, async (req, res) => {
-  await db.delete(questionsTable).where(eq(questionsTable.id, parseInt(req.params['questionId']! as string)));
+router.delete(["/questions/:id", "/quizzes/:quizId/questions/:questionId"], authenticate, requireAdmin, async (req, res) => {
+  const questionId = parseInt((req.params['id'] ?? req.params['questionId'])! as string);
+  await db.delete(questionsTable).where(eq(questionsTable.id, questionId));
   res.status(204).send();
 });
 
 router.post("/quizzes/:id/submit", authenticate, async (req, res) => {
   const quizId = parseInt(req.params['id']! as string);
   const userId = req.user!.userId;
-  const { answers } = req.body as { answers: Record<number, number[]> };
+  const answersBody = req.body.answers;
+  const answersMap: Record<number, number[]> = {};
+  if (Array.isArray(answersBody)) {
+    for (const item of answersBody) {
+      if (item && typeof item === "object" && "questionId" in item && "selectedOptionIds" in item) {
+        answersMap[Number(item.questionId)] = (item.selectedOptionIds as any[]).map(Number);
+      }
+    }
+  } else if (answersBody && typeof answersBody === "object") {
+    for (const [key, val] of Object.entries(answersBody)) {
+      if (Array.isArray(val)) {
+        answersMap[Number(key)] = val.map(Number);
+      }
+    }
+  }
 
   const [quiz] = await db.select().from(quizzesTable).where(eq(quizzesTable.id, quizId)).limit(1);
   if (!quiz) { res.status(404).json({ error: "Not found" }); return; }
@@ -72,21 +87,35 @@ router.post("/quizzes/:id/submit", authenticate, async (req, res) => {
   const questions = await db.select().from(questionsTable).where(eq(questionsTable.quizId, quizId));
   let score = 0;
   let maxScore = 0;
-  const breakdown: Record<number, { correct: boolean; correctOptions: number[] }> = {};
+  const breakdown: any[] = [];
 
   for (const q of questions) {
     maxScore += q.points;
     const correctOpts = await db.select().from(optionsTable).where(and(eq(optionsTable.questionId, q.id), eq(optionsTable.isCorrect, true)));
     const correctIds = new Set(correctOpts.map(o => o.id));
-    const userAnswers = new Set((answers[q.id] ?? []).map(Number));
+    const userAnswers = new Set((answersMap[q.id] ?? []).map(Number));
     const isCorrect = correctOpts.length === userAnswers.size && [...correctIds].every(id => userAnswers.has(id));
     if (isCorrect) score += q.points;
-    breakdown[q.id] = { correct: isCorrect, correctOptions: [...correctIds] };
+    breakdown.push({
+      questionId: q.id,
+      correct: isCorrect,
+      points: q.points,
+      pointsEarned: isCorrect ? q.points : 0,
+      explanation: q.explanation ?? null,
+      correctOptionIds: [...correctIds]
+    });
   }
 
   const passed = maxScore > 0 && (score / maxScore) * 100 >= quiz.passPercent;
-  const [attempt] = await db.insert(quizAttemptsTable).values({ userId, quizId, score, maxScore, passed, answersJson: JSON.stringify(answers) }).returning();
-  res.json({ id: attempt.id, score, maxScore, passed, breakdown, attemptedAt: attempt.attemptedAt, attemptsLeft: quiz.maxAttempts - prevAttempts.length - 1 });
+  const [attempt] = await db.insert(quizAttemptsTable).values({ userId, quizId, score, maxScore, passed, answersJson: JSON.stringify(answersMap) }).returning();
+  res.json({
+    score,
+    maxScore,
+    passed,
+    attemptsUsed: prevAttempts.length + 1,
+    attemptsAllowed: quiz.maxAttempts,
+    breakdown
+  });
 });
 
 router.get("/quizzes/:id/attempts", authenticate, async (req, res) => {

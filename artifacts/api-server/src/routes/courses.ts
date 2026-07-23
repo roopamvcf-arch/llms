@@ -120,41 +120,43 @@ router.post("/courses/:courseId/modules", authenticate, requireAdmin, async (req
   res.status(201).json(mod);
 });
 
-router.put("/courses/:courseId/modules/:moduleId", authenticate, requireAdmin, async (req, res) => {
-  const moduleId = parseInt(req.params['moduleId']! as string);
+router.put(["/modules/:id", "/courses/:courseId/modules/:moduleId"], authenticate, requireAdmin, async (req, res) => {
+  const moduleId = parseInt((req.params['id'] ?? req.params['moduleId'])! as string);
   const { title, description, orderIndex } = req.body;
   const [mod] = await db.update(modulesTable).set({ title, description, orderIndex }).where(eq(modulesTable.id, moduleId)).returning();
   if (!mod) { res.status(404).json({ error: "Not found" }); return; }
   res.json(mod);
 });
 
-router.delete("/courses/:courseId/modules/:moduleId", authenticate, requireAdmin, async (req, res) => {
-  await db.delete(modulesTable).where(eq(modulesTable.id, parseInt(req.params['moduleId']! as string)));
+router.delete(["/modules/:id", "/courses/:courseId/modules/:moduleId"], authenticate, requireAdmin, async (req, res) => {
+  const moduleId = parseInt((req.params['id'] ?? req.params['moduleId'])! as string);
+  await db.delete(modulesTable).where(eq(modulesTable.id, moduleId));
   res.status(204).send();
 });
 
-router.post("/courses/:courseId/modules/:moduleId/lessons", authenticate, requireAdmin, async (req, res) => {
+router.post(["/modules/:moduleId/lessons", "/courses/:courseId/modules/:moduleId/lessons"], authenticate, requireAdmin, async (req, res) => {
   const moduleId = parseInt(req.params['moduleId']! as string);
   const { title, type, contentUrl, durationSeconds, orderIndex } = req.body;
   const [lesson] = await db.insert(lessonsTable).values({ moduleId, title, type, contentUrl, durationSeconds: durationSeconds ?? 0, orderIndex: orderIndex ?? 0 }).returning();
   res.status(201).json(lesson);
 });
 
-router.put("/courses/:courseId/modules/:moduleId/lessons/:lessonId", authenticate, requireAdmin, async (req, res) => {
-  const lessonId = parseInt(req.params['lessonId']! as string);
+router.put(["/lessons/:id", "/courses/:courseId/modules/:moduleId/lessons/:lessonId"], authenticate, requireAdmin, async (req, res) => {
+  const lessonId = parseInt((req.params['id'] ?? req.params['lessonId'])! as string);
   const { title, type, contentUrl, durationSeconds, orderIndex } = req.body;
   const [lesson] = await db.update(lessonsTable).set({ title, type, contentUrl, durationSeconds, orderIndex }).where(eq(lessonsTable.id, lessonId)).returning();
   if (!lesson) { res.status(404).json({ error: "Not found" }); return; }
   res.json(lesson);
 });
 
-router.delete("/courses/:courseId/modules/:moduleId/lessons/:lessonId", authenticate, requireAdmin, async (req, res) => {
-  await db.delete(lessonsTable).where(eq(lessonsTable.id, parseInt(req.params['lessonId']! as string)));
+router.delete(["/lessons/:id", "/courses/:courseId/modules/:moduleId/lessons/:lessonId"], authenticate, requireAdmin, async (req, res) => {
+  const lessonId = parseInt((req.params['id'] ?? req.params['lessonId'])! as string);
+  await db.delete(lessonsTable).where(eq(lessonsTable.id, lessonId));
   res.status(204).send();
 });
 
-router.post("/courses/:courseId/modules/:moduleId/lessons/:lessonId/complete", authenticate, async (req, res) => {
-  const lessonId = parseInt(req.params['lessonId']! as string);
+router.post(["/lessons/:id/complete", "/courses/:courseId/modules/:moduleId/lessons/:lessonId/complete"], authenticate, async (req, res) => {
+  const lessonId = parseInt((req.params['id'] ?? req.params['lessonId'])! as string);
   const userId = req.user!.userId;
   const { watchedSeconds } = req.body as { watchedSeconds?: number };
   const [existing] = await db.select().from(progressTable).where(and(eq(progressTable.userId, userId), eq(progressTable.lessonId, lessonId))).limit(1);

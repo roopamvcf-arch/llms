@@ -45,4 +45,14 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
+import path from "path";
+import fs from "fs";
+const publicPath = path.resolve(__dirname, "../../cyberlearn/dist/public");
+if (fs.existsSync(publicPath)) {
+  app.use(express.static(publicPath));
+  app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(path.resolve(publicPath, "index.html"));
+  });
+}
+
 export default app;

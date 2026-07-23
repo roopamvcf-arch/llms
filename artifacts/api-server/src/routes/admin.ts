@@ -29,24 +29,33 @@ router.post("/admin/users", ...protect, async (req, res) => {
   res.status(201).json({ id: user.id, username: user.username, email: user.email, role: user.role, avatarColor: user.avatarColor, totpEnabled: user.totpEnabled, isActive: user.isActive, createdAt: user.createdAt, lastLogin: user.lastLogin });
 });
 
-router.post("/admin/users/:id/suspend", ...protect, async (req, res) => {
+const suspendHandler = async (req: import("express").Request, res: import("express").Response) => {
   const id = parseInt(req.params['id']! as string);
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
   if (!user) { res.status(404).json({ error: "Not found" }); return; }
   await db.update(usersTable).set({ isActive: !user.isActive }).where(eq(usersTable.id, id));
   await db.insert(auditLogTable).values({ userId: req.user!.userId, action: user.isActive ? "SUSPEND_USER" : "ACTIVATE_USER", detail: user.username });
-  res.status(204).send();
-});
+  
+  // Return the updated user as expected by the schema
+  res.json({ id: user.id, username: user.username, email: user.email, role: user.role, avatarColor: user.avatarColor, totpEnabled: user.totpEnabled, isActive: !user.isActive, createdAt: user.createdAt, lastLogin: user.lastLogin });
+};
+router.post("/admin/users/:id/suspend", ...protect, suspendHandler);
+router.put("/admin/users/:id/suspend", ...protect, suspendHandler);
 
-router.post("/admin/users/:id/enroll", ...protect, async (req, res) => {
+const enrollHandler = async (req: import("express").Request, res: import("express").Response) => {
   const userId = parseInt(req.params['id']! as string);
   const { courseId } = req.body as { courseId: number };
   const [existing] = await db.select().from(enrollmentsTable).where(and(eq(enrollmentsTable.userId, userId), eq(enrollmentsTable.courseId, courseId))).limit(1);
-  if (existing) { res.json({ message: "Already enrolled" }); return; }
-  await db.insert(enrollmentsTable).values({ userId, courseId });
+  if (existing) {
+    res.json({ id: existing.id, userId: existing.userId, courseId: existing.courseId, enrolledAt: existing.enrolledAt, completedAt: existing.completedAt });
+    return;
+  }
+  const [enrollment] = await db.insert(enrollmentsTable).values({ userId, courseId }).returning();
   await db.insert(notificationsTable).values({ userId, type: "ENROLLMENT", title: "Enrolled in Course", body: "You have been enrolled in a new course by an administrator.", actionRoute: "/student/courses" });
-  res.status(201).json({ message: "Enrolled" });
-});
+  res.status(201).json({ id: enrollment.id, userId: enrollment.userId, courseId: enrollment.courseId, enrolledAt: enrollment.enrolledAt, completedAt: enrollment.completedAt });
+};
+router.post("/admin/users/:id/enroll", ...protect, enrollHandler);
+router.put("/admin/users/:id/enroll", ...protect, enrollHandler);
 
 router.get("/admin/users/:id/progress", ...protect, async (req, res) => {
   const userId = parseInt(req.params['id']! as string);
@@ -92,7 +101,7 @@ router.get("/admin/settings", ...protect, async (req, res) => {
   const rows = await db.select().from(platformSettingsTable);
   const settings: Record<string, string> = {};
   for (const r of rows) settings[r.key] = r.value;
-  res.json({ platformName: settings["platformName"] ?? "CyberLearn", adminPanelEnabled: settings["adminPanelEnabled"] !== "false", maintenanceMode: settings["maintenanceMode"] === "true" });
+  res.json({ platformName: settings["platformName"] ?? "Vande E-Kit", adminPanelEnabled: settings["adminPanelEnabled"] !== "false", maintenanceMode: settings["maintenanceMode"] === "true" });
 });
 
 router.put("/admin/settings", ...protect, async (req, res) => {
@@ -108,9 +117,11 @@ router.put("/admin/settings", ...protect, async (req, res) => {
   res.status(204).send();
 });
 
-router.get("/admin/activity", ...protect, async (req, res) => {
+const activityHandler = async (req: import("express").Request, res: import("express").Response) => {
   const logs = await db.select({ id: auditLogTable.id, action: auditLogTable.action, detail: auditLogTable.detail, timestamp: auditLogTable.timestamp, username: usersTable.username }).from(auditLogTable).leftJoin(usersTable, eq(usersTable.id, auditLogTable.userId)).orderBy(desc(auditLogTable.timestamp)).limit(10);
   res.json(logs);
-});
+};
+router.get("/admin/activity", ...protect, activityHandler);
+router.get("/admin/recent-activity", ...protect, activityHandler);
 
 export default router;

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Shield } from "lucide-react";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -40,15 +39,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-full max-w-md">
-        <div className="rounded-xl border border-border bg-card p-8 shadow-2xl">
+    <div className="min-h-screen flex items-center justify-center bg-background relative overflow-hidden">
+      {/* Background gradients for premium cyber-aesthetic */}
+      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="w-full max-w-md relative z-10 px-4">
+        <div className="rounded-2xl border border-border/80 bg-card/60 backdrop-blur-xl p-8 shadow-2xl relative">
+          {/* Subtle top border highlight */}
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary via-blue-500 to-primary rounded-t-2xl opacity-80" />
+
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
-              <Shield className="h-7 w-7 text-primary" />
+            <div className="mx-auto mb-5 flex h-14 w-80 items-center justify-center rounded-xl bg-slate-950 p-2 border border-primary/25 shadow-lg shadow-primary/5 transition-transform duration-300 hover:scale-105">
+              <img src="/logo.png" alt="VANDE E-KIT Logo" className="h-full w-full object-contain" />
             </div>
-            <h1 className="text-3xl font-mono font-bold text-primary tracking-tight">CyberLearn</h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">Security training for the modern threat landscape</p>
+            <p className="mt-2 text-xs font-mono uppercase tracking-wider text-muted-foreground">Learning Management System</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

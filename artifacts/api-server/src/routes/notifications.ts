@@ -11,15 +11,19 @@ router.get("/notifications", authenticate, async (req, res) => {
   res.json(notifications);
 });
 
-router.post("/notifications/read-all", authenticate, async (req, res) => {
+const readAllHandler = async (req: import("express").Request, res: import("express").Response) => {
   await db.update(notificationsTable).set({ isRead: true }).where(eq(notificationsTable.userId, req.user!.userId));
   res.status(204).send();
-});
+};
+router.post("/notifications/read-all", authenticate, readAllHandler);
+router.put("/notifications/read-all", authenticate, readAllHandler);
 
-router.post("/notifications/:id/read", authenticate, async (req, res) => {
+const readHandler = async (req: import("express").Request, res: import("express").Response) => {
   const id = parseInt(req.params['id']! as string);
   await db.update(notificationsTable).set({ isRead: true }).where(and(eq(notificationsTable.id, id), eq(notificationsTable.userId, req.user!.userId)));
   res.status(204).send();
-});
+};
+router.post("/notifications/:id/read", authenticate, readHandler);
+router.put("/notifications/:id/read", authenticate, readHandler);
 
 export default router;

@@ -12,7 +12,7 @@ function CertificateModal({ cert, onClose }: { cert: any; onClose: () => void })
           <X className="h-5 w-5" />
         </button>
         <div className="bg-[#f97316] px-8 py-6">
-          <p className="text-white text-xs font-mono font-bold uppercase tracking-widest mb-1">CyberLearn LMS</p>
+          <p className="text-white text-xs font-mono font-bold uppercase tracking-widest mb-1">Vande E-Kit LMS</p>
           <h2 className="text-2xl font-bold text-white">Certificate of Completion</h2>
         </div>
         <div className="px-8 py-8">

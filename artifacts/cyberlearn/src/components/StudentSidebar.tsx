@@ -19,8 +19,8 @@ export function StudentSidebar() {
 
   return (
     <aside className="flex h-screen w-16 flex-col items-center border-r border-border bg-[#171c27] py-4 shrink-0">
-      <div className="mb-6 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
-        <Shield className="h-5 w-5 text-primary" />
+      <div className="mb-6 flex h-6 w-14 items-center justify-center rounded-md bg-slate-950 p-0.5 border border-primary/20">
+        <img src="/logo.png" alt="Logo" className="h-full w-full object-contain" />
       </div>
 
       <nav className="flex flex-1 flex-col items-center gap-1">

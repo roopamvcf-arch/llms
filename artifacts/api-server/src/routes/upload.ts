@@ -52,6 +52,44 @@ router.post("/upload/badge", authenticate, requireAdmin, upload.single("file"), 
   res.json({ url: fileUrl(req, req.file.filename), filename: req.file.filename });
 });
 
+router.get("/upload/files", authenticate, requireAdmin, async (req, res) => {
+  try {
+    if (!fs.existsSync(uploadsDir)) {
+      res.json([]);
+      return;
+    }
+    const files = await fs.promises.readdir(uploadsDir);
+    const result = [];
+    for (const file of files) {
+      if (file.startsWith(".")) continue;
+      const filePath = path.join(uploadsDir, file);
+      const stat = await fs.promises.stat(filePath);
+      if (stat.isFile()) {
+        const ext = path.extname(file).toLowerCase();
+        let type: "video" | "pdf" | "image" | "other" = "other";
+        if ([".mp4", ".webm", ".ogg"].includes(ext)) {
+          type = "video";
+        } else if (ext === ".pdf") {
+          type = "pdf";
+        } else if ([".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"].includes(ext)) {
+          type = "image";
+        }
+        result.push({
+          filename: file,
+          url: fileUrl(req, file),
+          type,
+          size: stat.size,
+          createdAt: stat.birthtime,
+        });
+      }
+    }
+    result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to list uploads" });
+  }
+});
+
 router.use("/uploads", (req, res, next) => {
   const filePath = path.join(uploadsDir, path.basename(req.path));
   if (!fs.existsSync(filePath)) { res.status(404).json({ error: "Not found" }); return; }

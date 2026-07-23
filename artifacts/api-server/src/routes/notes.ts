@@ -19,8 +19,8 @@ router.post("/lessons/:id/notes", authenticate, async (req, res) => {
   res.status(201).json(note);
 });
 
-router.delete("/lessons/:lessonId/notes/:noteId", authenticate, async (req, res) => {
-  const noteId = parseInt(req.params['noteId']! as string);
+router.delete(["/notes/:id", "/lessons/:lessonId/notes/:noteId"], authenticate, async (req, res) => {
+  const noteId = parseInt((req.params['id'] ?? req.params['noteId'])! as string);
   await db.delete(videoNotesTable).where(and(eq(videoNotesTable.id, noteId), eq(videoNotesTable.userId, req.user!.userId)));
   res.status(204).send();
 });

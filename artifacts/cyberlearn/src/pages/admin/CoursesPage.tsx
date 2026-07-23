@@ -7,28 +7,36 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { cn, getDifficultyColor } from "@/lib/utils";
 
+import { AssetSelector } from "@/components/AssetSelector";
+
 function CourseForm({ initial, onSubmit, onCancel, loading }: { initial?: any; onSubmit: (data: any) => void; onCancel: () => void; loading: boolean }) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [category, setCategory] = useState(initial?.category ?? "");
   const [difficulty, setDifficulty] = useState(initial?.difficulty ?? "BEGINNER");
   const [thumbnailUrl, setThumbnailUrl] = useState(initial?.thumbnailUrl ?? "");
+  const [showAssetSelector, setShowAssetSelector] = useState(false);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="rounded-xl border border-border bg-card p-6 w-full max-w-md shadow-2xl">
         <h2 className="text-lg font-mono font-bold text-foreground mb-4">{initial ? "Edit Course" : "New Course"}</h2>
         <div className="space-y-3">
-          {[
-            { label: "Title", value: title, setter: setTitle, placeholder: "Course title" },
-            { label: "Category", value: category, setter: setCategory, placeholder: "e.g. Network Security" },
-            { label: "Thumbnail URL", value: thumbnailUrl, setter: setThumbnailUrl, placeholder: "https://..." },
-          ].map(({ label, value, setter, placeholder }) => (
-            <div key={label}>
-              <label className="block text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider mb-1">{label}</label>
-              <input value={value} onChange={e => setter(e.target.value)} placeholder={placeholder} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
+          <div>
+            <label className="block text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider mb-1">Title</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Course title" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider mb-1">Category</label>
+            <input value={category} onChange={e => setCategory(e.target.value)} placeholder="e.g. Network Security" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider mb-1">Thumbnail URL</label>
+            <div className="flex gap-2">
+              <input value={thumbnailUrl} onChange={e => setThumbnailUrl(e.target.value)} placeholder="https://..." className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
+              <button type="button" onClick={() => setShowAssetSelector(true)} className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-mono hover:bg-white/5 text-foreground shrink-0">Browse</button>
             </div>
-          ))}
+          </div>
           <div>
             <label className="block text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider mb-1">Description</label>
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none resize-none" />
@@ -47,6 +55,16 @@ function CourseForm({ initial, onSubmit, onCancel, loading }: { initial?: any; o
           </button>
         </div>
       </div>
+      {showAssetSelector && (
+        <AssetSelector
+          typeFilter="image"
+          onSelect={(url) => {
+            setThumbnailUrl(url);
+            setShowAssetSelector(false);
+          }}
+          onClose={() => setShowAssetSelector(false)}
+        />
+      )}
     </div>
   );
 }

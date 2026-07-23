@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import type { ModuleWithLessons, Lesson } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { AssetSelector } from "@/components/AssetSelector";
 
 const LESSON_TYPE_ICONS: Record<string, any> = { VIDEO: Video, PDF: FileText, QUIZ: HelpCircle };
 
@@ -27,6 +28,7 @@ export default function CourseEditorPage() {
   const [addingModule, setAddingModule] = useState(false);
   const [addingLessonForModule, setAddingLessonForModule] = useState<number | null>(null);
   const [newLesson, setNewLesson] = useState({ title: "", type: "VIDEO", contentUrl: "" });
+  const [showAssetSelector, setShowAssetSelector] = useState(false);
 
   const createModuleMutation = useCreateModule();
   const createLessonMutation = useCreateLesson();
@@ -113,7 +115,12 @@ export default function CourseEditorPage() {
                           <option value="PDF">PDF</option>
                           <option value="QUIZ">QUIZ</option>
                         </select>
-                        <input value={newLesson.contentUrl} onChange={e => setNewLesson(p => ({ ...p, contentUrl: e.target.value }))} placeholder="Content URL" className="w-full rounded border border-border bg-card px-2 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
+                        {newLesson.type !== "QUIZ" && (
+                          <div className="flex gap-2">
+                            <input value={newLesson.contentUrl} onChange={e => setNewLesson(p => ({ ...p, contentUrl: e.target.value }))} placeholder="Content URL" className="flex-1 rounded border border-border bg-card px-2 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none" />
+                            <button type="button" onClick={() => setShowAssetSelector(true)} className="rounded border border-border bg-card px-2 py-1.5 text-xs font-mono hover:bg-white/5 text-foreground shrink-0">Browse</button>
+                          </div>
+                        )}
                         <div className="flex gap-1">
                           <button onClick={() => setAddingLessonForModule(null)} className="flex-1 rounded py-1 text-xs text-muted-foreground hover:text-foreground border border-border">Cancel</button>
                           <button onClick={() => handleAddLesson(module.id)} disabled={createLessonMutation.isPending} className="flex-1 rounded py-1 text-xs font-bold text-primary-foreground bg-primary">Add</button>
@@ -169,6 +176,16 @@ export default function CourseEditorPage() {
           )}
         </main>
       </div>
+      {showAssetSelector && (
+        <AssetSelector
+          typeFilter={newLesson.type === "VIDEO" ? "video" : "pdf"}
+          onSelect={(url) => {
+            setNewLesson(p => ({ ...p, contentUrl: url }));
+            setShowAssetSelector(false);
+          }}
+          onClose={() => setShowAssetSelector(false)}
+        />
+      )}
     </div>
   );
 }

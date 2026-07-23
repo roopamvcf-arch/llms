@@ -17,7 +17,7 @@ export default function AdminCertificatesPage() {
             <h2 className="text-sm font-mono font-semibold text-muted-foreground uppercase tracking-wider">Certificate Template</h2>
             <div className="bg-white rounded-xl p-8 shadow-inner">
               <div className="bg-[#f97316] rounded-t-lg px-6 py-4 -mx-4 -mt-4 mb-6">
-                <p className="text-white text-xs font-mono font-bold uppercase tracking-widest">CyberLearn LMS</p>
+                <p className="text-white text-xs font-mono font-bold uppercase tracking-widest">Vande E-Kit LMS</p>
                 <h2 className="text-2xl font-bold text-white mt-1">Certificate of Completion</h2>
               </div>
               <div className="space-y-3">

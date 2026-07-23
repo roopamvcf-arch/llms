@@ -29,9 +29,15 @@ router.put("/users/me/preferences", authenticate, async (req, res) => {
 });
 
 router.put("/users/me/avatar-color", authenticate, async (req, res) => {
-  const { avatarColor } = req.body as { avatarColor: string };
-  await db.update(usersTable).set({ avatarColor }).where(eq(usersTable.id, req.user!.userId));
-  res.status(204).send();
+  const { color, avatarColor } = req.body as { color?: string; avatarColor?: string };
+  const finalColor = color ?? avatarColor;
+  if (!finalColor) {
+    res.status(400).json({ error: "color is required" });
+    return;
+  }
+  const [user] = await db.update(usersTable).set({ avatarColor: finalColor }).where(eq(usersTable.id, req.user!.userId)).returning();
+  if (!user) { res.status(404).json({ error: "Not found" }); return; }
+  res.json({ id: user.id, username: user.username, email: user.email, role: user.role, avatarColor: user.avatarColor, totpEnabled: user.totpEnabled, isActive: user.isActive, createdAt: user.createdAt, lastLogin: user.lastLogin });
 });
 
 export default router;

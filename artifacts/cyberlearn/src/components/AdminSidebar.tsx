@@ -20,13 +20,12 @@ export function AdminSidebar() {
 
   return (
     <aside className="flex h-screen w-56 flex-col border-r border-border bg-[#171c27] shrink-0">
-      <div className="flex items-center gap-2.5 border-b border-border px-4 py-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
-          <Shield className="h-4 w-4 text-primary" />
+      <div className="flex flex-col items-center gap-2 border-b border-border px-4 py-4 bg-white/[0.02]">
+        <div className="flex h-11 w-full items-center justify-center rounded-lg bg-slate-950 px-2 py-1 border border-primary/20 shrink-0">
+          <img src="/logo.png" alt="VANDE E-KIT Logo" className="h-full w-full object-contain" />
         </div>
-        <div>
-          <p className="text-sm font-mono font-bold text-primary">CyberLearn</p>
-          <p className="text-xs text-muted-foreground">Admin Portal</p>
+        <div className="text-center">
+          <p className="text-[10px] uppercase font-mono font-bold text-muted-foreground tracking-widest">Admin Portal</p>
         </div>
       </div>
 

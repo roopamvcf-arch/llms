@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { setAuthTokenGetter, useGetMe, useLogout } from "@workspace/api-client-react";
+import { setAuthTokenGetter, useGetMe, useLogout, refreshToken } from "@workspace/api-client-react";
 import type { UserProfile } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 
@@ -25,19 +25,45 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [, setLocation] = useLocation();
+  const [hasAttemptedRefresh, setHasAttemptedRefresh] = useState(false);
+  const [refreshSucceeded, setRefreshSucceeded] = useState(false);
 
-  const { data, isLoading } = useGetMe({
+  useEffect(() => {
+    async function attemptRefresh() {
+      try {
+        const res = await refreshToken();
+        if (res?.accessToken) {
+          setAccessToken(res.accessToken);
+          setRefreshSucceeded(true);
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        setUser(null);
+      } finally {
+        setHasAttemptedRefresh(true);
+      }
+    }
+    attemptRefresh();
+  }, []);
+
+  const { data, isLoading: isGetMeLoading, isError } = useGetMe({
     query: {
       retry: false,
       queryKey: ["getMe"],
+      enabled: hasAttemptedRefresh && refreshSucceeded,
     }
   });
+
+  const isLoading = !hasAttemptedRefresh || (refreshSucceeded && isGetMeLoading);
 
   useEffect(() => {
     if (data) {
       setUser(data);
+    } else if (isError) {
+      setUser(null);
     }
-  }, [data]);
+  }, [data, isError]);
 
   const logoutMutation = useLogout();
 

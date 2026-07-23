@@ -2,6 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import speakeasy from "speakeasy";
 import jwt from "jsonwebtoken";
+import QRCode from "qrcode";
 import { db } from "@workspace/db";
 import { usersTable, sessionsTable } from "@workspace/db/schema";
 import { eq, and, gt } from "drizzle-orm";
@@ -75,8 +76,13 @@ router.post("/auth/login", async (req, res) => {
   });
 });
 
-router.post("/auth/totp", async (req, res) => {
-  const { tempToken, code } = req.body as { tempToken: string; code: string };
+router.post(["/auth/verify-totp", "/auth/totp"], async (req, res) => {
+  const { tempToken, totpCode, code } = req.body as { tempToken: string; totpCode?: string; code?: string };
+  const actualCode = totpCode ?? code;
+  if (!actualCode) {
+    res.status(400).json({ error: "totpCode is required" });
+    return;
+  }
   let payload: { userId: number; step: string };
   try {
     payload = jwt.verify(tempToken, ACCESS_SECRET) as typeof payload;
@@ -93,7 +99,7 @@ router.post("/auth/totp", async (req, res) => {
     res.status(401).json({ error: "TOTP not configured" });
     return;
   }
-  const valid = speakeasy.totp.verify({ secret: user.totpSecret, encoding: "base32", token: code, window: 1 });
+  const valid = speakeasy.totp.verify({ secret: user.totpSecret, encoding: "base32", token: actualCode, window: 1 });
   if (!valid) {
     res.status(401).json({ error: "Invalid TOTP code" });
     return;
@@ -144,13 +150,14 @@ router.get("/auth/me", authenticate, async (req, res) => {
   res.json({ id: user.id, username: user.username, email: user.email, role: user.role, avatarColor: user.avatarColor, totpEnabled: user.totpEnabled, isActive: user.isActive, createdAt: user.createdAt, lastLogin: user.lastLogin });
 });
 
-router.post("/auth/totp/setup", authenticate, async (req, res) => {
+router.post(["/auth/setup-totp", "/auth/totp/setup"], authenticate, async (req, res) => {
   const secret = speakeasy.generateSecret({ name: `CyberLearn (${req.user!.userId})` });
   await db.update(usersTable).set({ totpSecret: secret.base32, totpEnabled: false }).where(eq(usersTable.id, req.user!.userId));
-  res.json({ secret: secret.base32, otpauthUrl: secret.otpauth_url });
+  const qrCodeDataUrl = await QRCode.toDataURL(secret.otpauth_url ?? "");
+  res.json({ secret: secret.base32, qrCodeDataUrl });
 });
 
-router.post("/auth/password", authenticate, async (req, res) => {
+router.post(["/auth/change-password", "/auth/password"], authenticate, async (req, res) => {
   const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.userId)).limit(1);
   if (!user) { res.status(404).json({ error: "Not found" }); return; }
