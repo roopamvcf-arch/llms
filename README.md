@@ -65,17 +65,38 @@ A full-stack cybersecurity Learning Management System with separate student and 
 
 ---
 
-## Prerequisites
+## Quick Install — Kali Linux (one command)
 
-- **Node.js** v20 or v24 (`node --version`)
-- **pnpm** v9+ — install with `npm install -g pnpm`
-- **PostgreSQL** 14+ running locally
-  - Default config expects it on port `5433` with a database named `cyberlearn`
-  - Adjust `DATABASE_URL` in `.env` if your setup differs
+Clone the repo and run the installer. It handles everything automatically — Node.js, pnpm, PostgreSQL, database setup, build, and registers the `cyberlearn` launch command system-wide.
+
+```bash
+git clone https://github.com/roopamvcf-arch/llms.git && cd llms && sudo bash install.sh
+```
+
+Once done, launch from any terminal, anywhere:
+
+```bash
+cyberlearn
+```
+
+This starts the server and automatically opens `http://localhost:5000` in your browser.
+
+> The installer is idempotent — safe to run again if anything fails or after an update.
 
 ---
 
-## Installation
+## Prerequisites
+
+- **Node.js** v20+ (`node --version`) — installed automatically by `install.sh` if missing
+- **pnpm** v9+ — installed automatically by `install.sh` if missing
+- **PostgreSQL** 14+ — installed automatically by `install.sh` if missing
+  - Detected port is used automatically; adjust `DATABASE_URL` in `.env` if needed
+
+---
+
+## Manual Installation
+
+## Manual Installation
 
 ### 1. Clone the repository
 
@@ -95,7 +116,7 @@ pnpm install
 Create a `.env` file in the project root (copy from the example below):
 
 ```env
-DATABASE_URL=postgresql://<user>@localhost:5433/cyberlearn?sslmode=disable
+DATABASE_URL=postgresql://<user>@localhost:5432/cyberlearn?sslmode=disable
 SESSION_SECRET=change_this_to_a_long_random_secret
 PORT=5000
 BASE_PATH=/
@@ -258,7 +279,7 @@ pnpm --filter @workspace/api-spec run codegen
 
 | Variable | Description | Example |
 |---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://kali@localhost:5433/cyberlearn` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://kali@localhost:5432/cyberlearn` |
 | `SESSION_SECRET` | Secret used to sign JWT tokens | `a_long_random_string` |
 | `PORT` | Port for both the API server and Vite | `5000` |
 | `BASE_PATH` | URL base path (use `/` for local dev) | `/` |
@@ -287,4 +308,3 @@ pnpm --filter @workspace/cyberlearn run typecheck
 # Typecheck API server only
 pnpm --filter @workspace/api-server run typecheck
 ```
-# llms
